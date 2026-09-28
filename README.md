@@ -8,13 +8,17 @@
 
 *Ministry of Earth Sciences (MoES) / India Meteorological Department (IMD)*
 
-[![Frontend](https://img.shields.io/badge/Frontend-React_19-61DAFB?style=flat-square&logo=react)](http://localhost:5173/dashboard)
-[![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi)](http://localhost:8001/docs)
+**🌐 Live Deployments:**
+- **Frontend Dashboard:** [https://stormsight-frontend.vercel.app](https://stormsight-frontend.vercel.app)
+- **Backend API (Docs):** [https://sih-ps72.onrender.com/docs](https://sih-ps72.onrender.com/docs)
+
+[![Frontend](https://img.shields.io/badge/Frontend-React_19-61DAFB?style=flat-square&logo=react)](https://stormsight-frontend.vercel.app/dashboard)
+[![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi)](https://sih-ps72.onrender.com/docs)
 [![ML](https://img.shields.io/badge/ML-PyTorch_2.14-EE4C2C?style=flat-square&logo=pytorch)](./ml/)
 [![Database](https://img.shields.io/badge/Database-PostGIS-336791?style=flat-square&logo=postgresql)](./backend/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](./LICENSE)
 
-[Live Dashboard](http://localhost:5173/dashboard) · [API Docs](http://localhost:8001/docs) · [Architecture](http://localhost:5173/architecture) · [Presentation](./docs/SIH2026_PS26072_Presentation_Master.md)
+[Live Dashboard](https://stormsight-frontend.vercel.app/dashboard) · [API Docs](https://sih-ps72.onrender.com/docs) · [Architecture](https://stormsight-frontend.vercel.app/architecture) · [Presentation](./docs/SIH2026_PS26072_Presentation_Master.md)
 
 </div>
 
