@@ -72,7 +72,7 @@ export function Topbar() {
 
       <div className="flex items-center gap-4">
         <div className="text-sm text-nowcast-textMuted">
-          12 Nov 2026, 14:30 UTC
+          {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}
         </div>
         
         <div className="flex items-center gap-2 px-3 py-1 bg-nowcast-success/10 border border-nowcast-success/20 rounded-full">

@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Circle, Popup, useMap } from 'react-leaflet';
-import { useNowcastStore, DEMO_ALERTS } from '../../store/useNowcastStore';
-import { getNowcast, getAlerts } from '../../lib/api';
+import { useNowcastStore } from '../../store/useNowcastStore';
 import {
   type WeatherAlert,
   type RiskLevel,
@@ -12,6 +11,7 @@ import { AlertTriangle, Shield, Zap, CloudLightning, X, Plus, Minus } from 'luci
 // India center
 const MAP_CENTER = [20.5937, 78.9629] as [number, number];
 const ZOOM = 5;
+
 /** Resolve the icon component by event type. */
 function getEventIcon(eventType: string) {
   switch (eventType) {
@@ -43,7 +43,6 @@ function MapUpdater({ cells, alerts }: { cells: any[]; alerts: WeatherAlert[] })
   useEffect(() => {
     if (mapCenter) {
       map.flyTo(mapCenter, mapZoom || 8, { duration: 1.5 });
-      // Reset after flying so we don't keep snapping on re-renders
       setTimeout(() => setMapCenter(null), 1500);
     }
   }, [mapCenter, mapZoom, map, setMapCenter]);
@@ -69,58 +68,20 @@ function CustomZoomControl() {
 //  NowcastMap – primary export
 // ────────────────────────────────────────────────────────────────
 export function NowcastMap() {
-  const { cells, setNowcastData, alerts, setAlerts } = useNowcastStore();
+  const { cells, alerts } = useNowcastStore();
   const [loading, setLoading] = useState(true);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const fetchInitial = async () => {
-      try {
-        const data = await getNowcast();
-        setNowcastData(data);
-      } catch (err) {
-        console.error('Failed to fetch initial nowcast', err);
-      }
-
-      try {
-        const alertData = await getAlerts();
-        if (alertData?.features?.length) {
-          setAlerts(
-            alertData.features.map((f: any) => ({
-              id: f.properties.id,
-              title: f.properties.title ?? 'Weather Alert',
-              description: f.properties.description ?? '',
-              riskLevel: mapSeverityToRisk(f.properties.severity_level),
-              latitude: f.geometry.coordinates[1],
-              longitude: f.geometry.coordinates[0],
-              radius_km: f.properties.radius_km ?? 50,
-              issuedAt: f.properties.issued_at,
-              validUntil: f.properties.valid_until,
-              eventType: f.properties.event_type ?? 'THUNDERSTORM',
-              probability: f.properties.probability ?? 0.5,
-            })),
-          );
-        }
-      } catch {
-        // Fallback to demo alerts
-        setAlerts(DEMO_ALERTS);
-      }
-
-      setLoading(false);
-    };
-    fetchInitial();
-
-    // TODO: Connect WebSocket for real-time updates
-  }, [setNowcastData]);
+    // Short delay to show the loading animation, then reveal the map
+    const timer = setTimeout(() => setLoading(false), 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   const visibleAlerts = useMemo(
     () => alerts.filter((a) => !dismissedAlerts.has(a.id)),
     [alerts, dismissedAlerts],
   );
-
-  const handleFocusAlert = (_alert: WeatherAlert) => {
-    // Could pan the map to the alert location here
-  };
 
   return (
     <div className="h-full w-full bg-nowcast-bg relative">
@@ -136,37 +97,13 @@ export function NowcastMap() {
           className="map-tiles"
         />
 
-        {/* ── Storm Cells ── */}
-        {cells.map((cell) => (
-          <Circle
-            key={cell.cell_id}
-            center={[cell.center.lat, cell.center.lon]}
-            radius={cell.radius_km * 1000}
-            pathOptions={{
-              color: cell.severity === 'severe' ? '#FF1744' : '#FFAA00',
-              fillColor: cell.severity === 'severe' ? '#FF1744' : '#FFAA00',
-              fillOpacity: 0.4,
-            }}
-          >
-            <Popup className="nowcast-popup">
-              <div className="font-sans">
-                <h3 className="font-bold text-slate-800">Storm Cell {cell.cell_id}</h3>
-                <p className="text-sm">
-                  Severity: <span className="uppercase font-semibold">{cell.severity}</span>
-                </p>
-                <p className="text-sm">Probability: {(cell.probability * 100).toFixed(0)}%</p>
-              </div>
-            </Popup>
-          </Circle>
-        ))}
-
         {/* ── Warning Alert Zones ── */}
         {visibleAlerts.map((alert) => {
           const cfg = RISK_LEVEL_CONFIG[alert.riskLevel];
           return (
             <React.Fragment key={alert.id}>
-              {/* Outer glow ring for high/critical */}
-              {(alert.riskLevel === 'critical' || alert.riskLevel === 'high') && (
+              {/* Outer glow ring for severe/extreme */}
+              {(alert.riskLevel === 'extreme' || alert.riskLevel === 'severe') && (
                 <Circle
                   center={[alert.latitude, alert.longitude]}
                   radius={alert.radius_km * 1000 * 1.3}
@@ -288,10 +225,12 @@ function mapSeverityToRisk(severity?: string): RiskLevel {
     case 'EXTREME':
       return 'extreme';
     case 'WARNING':
+    case 'SEVERE':
       return 'severe';
     case 'WATCH':
       return 'high';
     case 'ADVISORY':
+    case 'MODERATE':
       return 'moderate';
     case 'LOW':
       return 'low';

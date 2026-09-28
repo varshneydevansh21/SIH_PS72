@@ -13,44 +13,7 @@ function formatRelativeTime(iso: string): string {
   return `${hours}h ${minutes % 60}m remaining`;
 }
 
-const STATS_DATA = [
-  {
-    title: 'Active Thunderstorm Cells',
-    value: '12',
-    trend: '↑ 3',
-    trendColor: 'text-nowcast-success',
-    caption: 'vs previous hour',
-    icon: Cloud,
-    iconColor: 'text-blue-400',
-  },
-  {
-    title: 'Lightning Events',
-    value: '2,184',
-    trend: '↑ 18%',
-    trendColor: 'text-nowcast-danger',
-    caption: 'last 1 hour',
-    icon: Zap,
-    iconColor: 'text-nowcast-accent',
-  },
-  {
-    title: 'High Risk Areas',
-    value: '5',
-    trend: null,
-    trendColor: '',
-    caption: '> 70% probability',
-    icon: AlertTriangle,
-    iconColor: 'text-nowcast-danger',
-  },
-  {
-    title: 'Coverage Area',
-    value: 'North India',
-    trend: null,
-    trendColor: '',
-    caption: '(Demo Region)',
-    icon: MapPin,
-    iconColor: 'text-blue-400',
-  },
-];
+
 
 const MAP_LAYERS = [
   { id: 'thunderstorm', label: 'Thunderstorm Probability' },
@@ -60,19 +23,72 @@ const MAP_LAYERS = [
 ] as const;
 
 export function DashboardView() {
-  const { alerts, selectedLayer, setSelectedLayer } = useNowcastStore();
+  const { alerts, cells, lightningStrokes, selectedLayer, setSelectedLayer, fetchActiveAlerts, fetchLatestNowcast, fetchRadarAndLightning } = useNowcastStore();
   const [isFullScreen, setIsFullScreen] = React.useState(false);
+  
+  React.useEffect(() => {
+    fetchActiveAlerts();
+    fetchLatestNowcast();
+    fetchRadarAndLightning();
+    
+    // Auto-refresh every 5 minutes
+    const interval = setInterval(() => {
+      fetchActiveAlerts();
+      fetchLatestNowcast();
+      fetchRadarAndLightning();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchActiveAlerts, fetchLatestNowcast, fetchRadarAndLightning]);
   
   const sortedAlerts = useMemo(() => {
     const order: Record<RiskLevel, number> = { extreme: 0, severe: 1, high: 2, moderate: 3, low: 4, minimal: 5 };
     return [...alerts].sort((a, b) => order[a.riskLevel] - order[b.riskLevel]);
   }, [alerts]);
 
+  const statsData = useMemo(() => [
+    {
+      title: 'Active Thunderstorm Cells',
+      value: cells ? cells.length.toString() : '0',
+      trend: null,
+      trendColor: 'text-nowcast-success',
+      caption: 'current scan',
+      icon: Cloud,
+      iconColor: 'text-blue-400',
+    },
+    {
+      title: 'Lightning Events',
+      value: lightningStrokes ? lightningStrokes.length.toString() : '0',
+      trend: null,
+      trendColor: 'text-nowcast-danger',
+      caption: 'last 30 minutes',
+      icon: Zap,
+      iconColor: 'text-nowcast-accent',
+    },
+    {
+      title: 'High Risk Areas',
+      value: alerts ? alerts.filter(a => a.riskLevel === 'extreme' || a.riskLevel === 'severe').length.toString() : '0',
+      trend: null,
+      trendColor: '',
+      caption: '> 70% probability',
+      icon: AlertTriangle,
+      iconColor: 'text-nowcast-danger',
+    },
+    {
+      title: 'Coverage Area',
+      value: 'North India',
+      trend: null,
+      trendColor: '',
+      caption: '(Active Region)',
+      icon: MapPin,
+      iconColor: 'text-blue-400',
+    },
+  ], [cells, lightningStrokes, alerts]);
+
   return (
     <div className="flex flex-col h-full gap-3 p-4 overflow-y-auto">
       {/* Top Stats Cards */}
       <div className="grid grid-cols-4 gap-2 shrink-0">
-        {STATS_DATA.map((stat) => (
+        {statsData.map((stat) => (
           <div key={stat.title} className="bg-nowcast-sidebar border border-nowcast-card rounded-xl p-2 flex flex-col justify-between">
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-1.5">
