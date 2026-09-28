@@ -12,10 +12,24 @@ export function Topbar() {
   
   const hasHighRiskAlerts = alerts.some(alert => ['high', 'severe', 'extreme'].includes(alert.riskLevel));
   
-  const handleLocationSelect = (loc: LocationRecord) => {
+  const handleLocationSelect = async (loc: LocationRecord) => {
     setSearchQuery(loc.name);
     setIsSearchFocused(false);
-    setMapCenter([loc.lat, loc.lng], 10);
+    
+    try {
+      // Query accurate coordinates for the selected location
+      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(loc.name)}&count=1`);
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        setMapCenter([data.results[0].latitude, data.results[0].longitude], 10);
+      } else {
+        // Fallback to local DB if no results
+        setMapCenter([loc.lat, loc.lng], 10);
+      }
+    } catch (e) {
+      console.error("Geocoding failed, falling back to local DB");
+      setMapCenter([loc.lat, loc.lng], 10);
+    }
   };
   
   const filteredLocations = searchQuery.length >= 2 
