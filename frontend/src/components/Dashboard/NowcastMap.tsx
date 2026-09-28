@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { MapContainer, TileLayer, Circle, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, Popup, useMap, CircleMarker } from 'react-leaflet';
 import { useNowcastStore } from '../../store/useNowcastStore';
 import {
   type WeatherAlert,
@@ -68,7 +68,7 @@ function CustomZoomControl() {
 //  NowcastMap – primary export
 // ────────────────────────────────────────────────────────────────
 export function NowcastMap() {
-  const { cells, alerts } = useNowcastStore();
+  const { cells, alerts, lightningStrokes } = useNowcastStore();
   const [loading, setLoading] = useState(true);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
 
@@ -170,6 +170,46 @@ export function NowcastMap() {
             </React.Fragment>
           );
         })}
+
+        {/* ── Active Thunderstorm Cells ── */}
+        {cells.map((cell: any) => (
+          <CircleMarker
+            key={cell.id}
+            center={[cell.lat, cell.lon]}
+            radius={6}
+            pathOptions={{
+              color: '#f97316',
+              fillColor: '#fdba74',
+              fillOpacity: 0.7,
+              weight: 1,
+            }}
+          >
+            <Popup>
+              <div className="text-xs font-semibold">Thunderstorm Cell</div>
+              <div className="text-[10px] text-gray-500">Intensity: {cell.intensity.toFixed(1)}</div>
+            </Popup>
+          </CircleMarker>
+        ))}
+
+        {/* ── Lightning Strokes ── */}
+        {lightningStrokes.map((stroke: any) => (
+          <CircleMarker
+            key={stroke.id}
+            center={[stroke.lat, stroke.lon]}
+            radius={3}
+            pathOptions={{
+              color: stroke.type === 'CG' ? '#eab308' : '#3b82f6',
+              fillColor: stroke.type === 'CG' ? '#fde047' : '#93c5fd',
+              fillOpacity: 0.9,
+              weight: 0,
+            }}
+          >
+            <Popup>
+              <div className="text-xs font-semibold">Lightning Stroke ({stroke.type})</div>
+              <div className="text-[10px] text-gray-500">Time: {new Date(stroke.time).toLocaleTimeString()}</div>
+            </Popup>
+          </CircleMarker>
+        ))}
 
         <MapUpdater cells={cells} alerts={visibleAlerts} />
         <CustomZoomControl />
