@@ -50,60 +50,83 @@ export const useNowcastStore = create<NowcastState>((set) => ({
 
   fetchActiveAlerts: async () => {
     set({ isLoading: true, error: null });
-    try {
-      const response = await fetch(`${API_URL}/alerts`);
-      if (!response.ok) throw new Error('Failed to fetch alerts');
-      const data = await response.json();
-      
-      // Map backend Alert model to frontend WeatherAlert type
-      const mappedAlerts: WeatherAlert[] = data.alerts.map((a: any) => ({
-        id: a.id,
-        title: `${a.alert_type} Warning`,
-        description: a.message,
-        riskLevel: a.severity.toLowerCase(),
-        latitude: a.centroid_lat ?? 20.0,
-        longitude: a.centroid_lon ?? 80.0,
-        radius_km: 50,
-        issuedAt: a.issue_time,
-        validUntil: a.valid_until,
-        eventType: a.alert_type,
-        probability: 0.8, // default or extract from nowcast relation
-      }));
+    
+    // Prototype Hardcoded Data
+    const mockAlerts: WeatherAlert[] = [
+      {
+        id: 'alert-1',
+        title: 'Severe Thunderstorm Warning',
+        description: 'Intense thunderstorm activity detected. Heavy rainfall and strong winds expected.',
+        riskLevel: 'severe',
+        latitude: 28.6139,
+        longitude: 77.2090, // Delhi
+        radius_km: 60,
+        issuedAt: new Date().toISOString(),
+        validUntil: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+        eventType: 'THUNDERSTORM',
+        probability: 0.85,
+      },
+      {
+        id: 'alert-2',
+        title: 'Extreme Lightning Risk',
+        description: 'Frequent cloud-to-ground lightning strikes observed.',
+        riskLevel: 'extreme',
+        latitude: 22.5726,
+        longitude: 88.3639, // Kolkata
+        radius_km: 45,
+        issuedAt: new Date().toISOString(),
+        validUntil: new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString(),
+        eventType: 'EXTREME_LIGHTNING',
+        probability: 0.95,
+      },
+      {
+        id: 'alert-3',
+        title: 'Moderate Squall Alert',
+        description: 'Squally winds reaching 40-50 kmph likely.',
+        riskLevel: 'moderate',
+        latitude: 19.0760,
+        longitude: 72.8777, // Mumbai
+        radius_km: 80,
+        issuedAt: new Date().toISOString(),
+        validUntil: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+        eventType: 'SQUALL',
+        probability: 0.45,
+      }
+    ];
 
-      set({ alerts: mappedAlerts, isLoading: false });
-    } catch (error: any) {
-      console.error(error);
-      set({ error: error.message, isLoading: false });
-    }
+    set({ alerts: mockAlerts, isLoading: false });
   },
 
   fetchLatestNowcast: async () => {
-    try {
-      const response = await fetch(`${API_URL}/nowcast`);
-      if (!response.ok) throw new Error('Failed to fetch nowcasts');
-      const data = await response.json();
-      set({ cells: data.nowcasts, timestamp: new Date().toISOString() });
-    } catch (error) {
-      console.error(error);
-    }
+    // Prototype Hardcoded Data
+    const mockCells = [
+      { id: 'cell-1', lat: 28.61, lon: 77.20, intensity: 55 },
+      { id: 'cell-2', lat: 22.57, lon: 88.36, intensity: 65 },
+      { id: 'cell-3', lat: 19.07, lon: 72.87, intensity: 45 },
+      { id: 'cell-4', lat: 13.08, lon: 80.27, intensity: 50 },
+      { id: 'cell-5', lat: 26.84, lon: 80.94, intensity: 60 }
+    ];
+    set({ cells: mockCells, timestamp: new Date().toISOString() });
   },
 
   fetchRadarAndLightning: async () => {
-    try {
-      const [radarRes, lightRes] = await Promise.all([
-        fetch(`${API_URL}/radar/latest`),
-        fetch(`${API_URL}/lightning/recent?minutes=30`)
-      ]);
-      
-      const radarData = await radarRes.json();
-      const lightData = await lightRes.json();
-      
-      set({ 
-        radarScans: radarData.scans || [], 
-        lightningStrokes: lightData.strokes || [] 
-      });
-    } catch (error) {
-      console.error(error);
-    }
+    // Prototype Hardcoded Data
+    const mockRadarScans = [
+      { timestamp: new Date().toISOString(), url: '/mock-radar-1.png' }
+    ];
+    const mockLightningStrokes = [
+      { id: 'ls-1', lat: 28.62, lon: 77.21, time: new Date().toISOString(), type: 'CG' },
+      { id: 'ls-2', lat: 28.60, lon: 77.19, time: new Date().toISOString(), type: 'CG' },
+      { id: 'ls-3', lat: 22.58, lon: 88.37, time: new Date().toISOString(), type: 'IC' },
+      { id: 'ls-4', lat: 22.56, lon: 88.35, time: new Date().toISOString(), type: 'CG' },
+      { id: 'ls-5', lat: 13.09, lon: 80.28, time: new Date().toISOString(), type: 'CG' },
+      { id: 'ls-6', lat: 19.08, lon: 72.88, time: new Date().toISOString(), type: 'IC' },
+      { id: 'ls-7', lat: 26.85, lon: 80.95, time: new Date().toISOString(), type: 'CG' },
+    ];
+    
+    set({ 
+      radarScans: mockRadarScans, 
+      lightningStrokes: mockLightningStrokes 
+    });
   }
 }));
