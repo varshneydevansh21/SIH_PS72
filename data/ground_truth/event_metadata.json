@@ -1,0 +1,26 @@
+{
+  "event_id": "IN-2024-DEL-SQUALL",
+  "description": "Pre-monsoon convective squall line across Delhi-NCR",
+  "center": {
+    "lat": 28.6139,
+    "lon": 77.209
+  },
+  "spatial_resolution_km": 2.0,
+  "grid_shape": [
+    512,
+    512
+  ],
+  "input_timesteps": 4,
+  "forecast_timesteps": 8,
+  "time_interval_minutes": 15,
+  "file": "data/ground_truth/delhi_convective_squall_2024.npz",
+  "channels": [
+    "radar_reflectivity",
+    "satellite_tir1",
+    "satellite_wv",
+    "tir1_wv_diff",
+    "lightning_density",
+    "nwp_cape",
+    "nwp_cin"
+  ]
+}

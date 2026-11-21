@@ -6,7 +6,7 @@ Adapted from PS 070 CycloneWatch architecture.
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
@@ -19,6 +19,7 @@ from app.api.nowcast import router as nowcast_router
 from app.api.alerts import router as alerts_router
 from app.api.radar import router as radar_router
 from app.api.lightning import router as lightning_router
+from app.api.metrics import router as metrics_router
 from app.api.ws import router as ws_router
 
 settings = get_settings()
@@ -59,13 +60,25 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # -- Routers -----------------------------------------------------------
+    # -- Unified API v1 Surface --------------------------------------------
+    api_v1 = APIRouter(prefix="/api/v1")
+    api_v1.include_router(health_router)
+    api_v1.include_router(ingest_router)
+    api_v1.include_router(nowcast_router)
+    api_v1.include_router(alerts_router)
+    api_v1.include_router(radar_router)
+    api_v1.include_router(lightning_router)
+    api_v1.include_router(metrics_router)
+    app.include_router(api_v1)
+
+    # -- Legacy Root Aliases -----------------------------------------------
     app.include_router(health_router)
     app.include_router(ingest_router)
     app.include_router(nowcast_router)
     app.include_router(alerts_router)
     app.include_router(radar_router)
     app.include_router(lightning_router)
+    app.include_router(metrics_router)
     app.include_router(ws_router)
 
     return app

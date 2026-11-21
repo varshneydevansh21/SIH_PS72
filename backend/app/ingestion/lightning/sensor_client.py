@@ -17,9 +17,11 @@ The ingestion loop runs every 60 seconds by default but can go faster.
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
+import logging
 import httpx
 import numpy as np
-from loguru import logger
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.ingestion.base import BaseIngestor
@@ -34,36 +36,39 @@ class LightningSensorClient(BaseIngestor):
     def __init__(self):
         super().__init__(source_name="Lightning_LLN")
         self.settings = get_settings()
+        api_url = getattr(self.settings, "lln_api_url", "") or "http://localhost:8001"
+        api_key = getattr(self.settings, "lln_api_key", "")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._client = httpx.AsyncClient(
-            base_url=self.settings.LLN_API_URL,
+            base_url=api_url,
             timeout=30.0,
-            headers={"Authorization": f"Bearer {self.settings.LLN_API_KEY}"},
+            headers=headers,
         )
-        # Rolling window of recent events for density computation
         self._recent_events: List[Dict] = []
+        from app.ingestion.lightning.processor import LightningProcessor
+        self.processor = LightningProcessor(
+            target_h=self.settings.pilot_grid_h,
+            target_w=self.settings.pilot_grid_w,
+            lat_min=self.settings.pilot_bbox_lat_min,
+            lat_max=self.settings.pilot_bbox_lat_max,
+            lon_min=self.settings.pilot_bbox_lon_min,
+            lon_max=self.settings.pilot_bbox_lon_max,
+        )
 
     async def fetch(self) -> Any:
-        """
-        Fetch lightning events from the last N minutes.
-
-        In production: queries the LLN API for recent strokes.
-        In development: generates synthetic lightning data for testing.
-
-        Returns:
-            List of raw lightning event dictionaries, or None.
-        """
-        if self.settings.APP_ENV == "development" and not self.settings.LLN_API_URL:
+        app_env = getattr(self.settings, "app_env", "development")
+        api_url = getattr(self.settings, "lln_api_url", "")
+        if app_env == "development" or not api_url:
             return self._generate_synthetic_data()
 
         try:
-            # Fetch events from the last polling interval
-            lookback_sec = self.settings.LIGHTNING_POLL_INTERVAL_SEC + 30  # small overlap
+            lookback_sec = getattr(self.settings, "lightning_poll_interval_sec", 300)
             response = await self._client.get(
                 "/events",
                 params={
                     "since_seconds": lookback_sec,
                     "format": "json",
-                    "include_ic": True,  # include intra-cloud flashes
+                    "include_ic": True,
                 },
             )
             response.raise_for_status()

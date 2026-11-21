@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     )
 
     # -- Application -------------------------------------------------------
+    app_env: str = "development"
     debug: bool = True
     api_version: str = "v1"
 
@@ -29,11 +30,29 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
 
     # -- Data paths --------------------------------------------------------
-    data_root: str = "/data"
-    radar_data_dir: str = "/data/raw/radar"
-    lightning_data_dir: str = "/data/raw/lightning"
-    satellite_data_dir: str = "/data/raw/satellite"
-    nwp_data_dir: str = "/data/raw/nwp"
+    data_root: str = "data"
+    radar_data_dir: str = "data/raw/radar"
+    lightning_data_dir: str = "data/raw/lightning"
+    satellite_data_dir: str = "data/raw/satellite"
+    nwp_data_dir: str = "data/raw/nwp"
+
+    # -- Atmospheric Data Credentials & APIs ------------------------------
+    imd_radar_api_url: str = ""
+    imd_radar_api_key: str = ""
+    mosdac_username: str = ""
+    mosdac_password: str = ""
+
+    # -- Pilot Domain Geometry (Delhi NCR) ---------------------------------
+    pilot_domain_name: str = "Delhi NCR"
+    pilot_center_lat: float = 28.6139
+    pilot_center_lon: float = 77.2090
+    pilot_grid_h: int = 512
+    pilot_grid_w: int = 512
+    pilot_grid_res_km: float = 2.0
+    pilot_bbox_lat_min: float = 24.0
+    pilot_bbox_lat_max: float = 33.2
+    pilot_bbox_lon_min: float = 72.0
+    pilot_bbox_lon_max: float = 82.5
 
     # -- ML ----------------------------------------------------------------
     ml_package_path: str = "/ml"

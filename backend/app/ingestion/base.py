@@ -13,8 +13,9 @@ Design rationale:
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+import logging
 
-from loguru import logger
+logger = logging.getLogger(__name__)
 
 
 class DataSourceStatus:

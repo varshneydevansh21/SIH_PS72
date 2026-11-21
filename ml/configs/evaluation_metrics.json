@@ -1,5 +1,8 @@
-﻿{
-  "_comment": "Evaluation metrics template for PS 072 nowcasting model.",
+{
+  "model": "UNet-ConvLSTM",
+  "status": "uncalibrated_pilot",
+  "evaluated_on": "2026-11-20T15:32:47.871271+00:00",
+  "num_test_samples": 0,
   "metrics": {
     "CSI": null,
     "POD": null,
@@ -10,6 +13,11 @@
     "lead_time_skill_60min": null,
     "lead_time_skill_120min": null
   },
-  "evaluated_on": null,
-  "num_test_samples": null
+  "targets_met": {
+    "CSI_target_ge_0_55": false,
+    "POD_target_ge_0_70": false,
+    "FAR_target_le_0_35": false,
+    "all_targets_met": false,
+    "notes": "Model is currently an uncalibrated pilot. Metrics will be generated once full training & held-out test splits complete."
+  }
 }

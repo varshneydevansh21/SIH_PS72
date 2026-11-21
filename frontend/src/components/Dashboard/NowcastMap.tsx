@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { MapContainer, TileLayer, Circle, Popup, useMap, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, Popup, useMap, CircleMarker, Polyline } from 'react-leaflet';
 import { useNowcastStore } from '../../store/useNowcastStore';
 import {
   type WeatherAlert,
@@ -68,7 +68,7 @@ function CustomZoomControl() {
 //  NowcastMap – primary export
 // ────────────────────────────────────────────────────────────────
 export function NowcastMap() {
-  const { cells, alerts, lightningStrokes } = useNowcastStore();
+  const { cells, alerts, lightningStrokes, forecastMinute } = useNowcastStore();
   const [loading, setLoading] = useState(true);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
 
@@ -171,25 +171,83 @@ export function NowcastMap() {
           );
         })}
 
-        {/* ── Active Thunderstorm Cells ── */}
-        {cells.map((cell: any) => (
-          <CircleMarker
-            key={cell.id}
-            center={[cell.lat, cell.lon]}
-            radius={6}
-            pathOptions={{
-              color: '#f97316',
-              fillColor: '#fdba74',
-              fillOpacity: 0.7,
-              weight: 1,
-            }}
-          >
-            <Popup>
-              <div className="text-xs font-semibold">Thunderstorm Cell</div>
-              <div className="text-[10px] text-gray-500">Intensity: {cell.intensity.toFixed(1)}</div>
-            </Popup>
-          </CircleMarker>
-        ))}
+        {/* ── Active Thunderstorm Cells & Forecast Tracks ── */}
+        {cells.map((cell: any) => {
+          let cLat = cell.center?.lat ?? cell.lat ?? 28.61;
+          let cLon = cell.center?.lon ?? cell.lon ?? 77.23;
+          let currentProb = cell.probability ?? 0.8;
+          const initialLat = cell.center?.lat ?? cell.lat ?? 28.61;
+          const initialLon = cell.center?.lon ?? cell.lon ?? 77.23;
+          const cellKey = cell.cell_id ?? cell.id ?? String(cLat + cLon);
+          const intensity = cell.intensity ?? cell.max_reflectivity_dbz ?? 42.0;
+
+          if (forecastMinute > 0 && Array.isArray(cell.forecast_positions)) {
+            const match = cell.forecast_positions.find((fp: any) => fp.minutes_ahead === forecastMinute);
+            if (match) {
+              cLat = match.lat;
+              cLon = match.lon;
+              if (typeof match.probability === 'number') {
+                currentProb = match.probability;
+              }
+            }
+          }
+
+          return (
+            <React.Fragment key={cellKey}>
+              {/* Predicted Trajectory Track */}
+              {Array.isArray(cell.forecast_positions) && cell.forecast_positions.length > 0 && (
+                <Polyline
+                  positions={[
+                    [initialLat, initialLon],
+                    ...cell.forecast_positions.map((p: any) => [p.lat, p.lon]),
+                  ]}
+                  pathOptions={{
+                    color: '#f97316',
+                    weight: 2,
+                    dashArray: '5 5',
+                    opacity: 0.7,
+                  }}
+                />
+              )}
+
+              <CircleMarker
+                center={[cLat, cLon]}
+                radius={8}
+                pathOptions={{
+                  color: '#ea580c',
+                  fillColor: '#f97316',
+                  fillOpacity: 0.9,
+                  weight: 2,
+                }}
+              >
+                <Popup>
+                  <div className="font-sans min-w-[160px]">
+                    <div className="text-xs font-bold text-slate-800">
+                      Thunderstorm Cell ({cell.cell_id ?? cell.id ?? 'Active'})
+                    </div>
+                    <div className="text-[10px] text-gray-600 mt-1">
+                      Position at: <b>{forecastMinute === 0 ? 'T = 0 (Live)' : `T + ${forecastMinute} min`}</b>
+                    </div>
+                    <div className="text-[10px] text-gray-600">
+                      Coordinates: {cLat.toFixed(2)}°N, {cLon.toFixed(2)}°E
+                    </div>
+                    <div className="text-[10px] text-gray-600">
+                      Reflectivity: {typeof intensity === 'number' ? intensity.toFixed(1) : intensity} dBZ
+                    </div>
+                    <div className="text-[10px] text-gray-600">
+                      Probability: <b>{(currentProb * 100).toFixed(0)}%</b>
+                    </div>
+                    {cell.severity && (
+                      <div className="text-[10px] font-bold text-orange-600 uppercase mt-1">
+                        Severity: {cell.severity}
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </CircleMarker>
+            </React.Fragment>
+          );
+        })}
 
         {/* ── Lightning Strokes ── */}
         {lightningStrokes.map((stroke: any) => (

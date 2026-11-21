@@ -1,4 +1,4 @@
-﻿[project]
+[project]
 name = "stormsight-backend"
 version = "0.1.0"
 description = "PS 072 - AIML Thunderstorm & Lightning Nowcasting API"

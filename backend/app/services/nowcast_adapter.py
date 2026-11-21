@@ -1,60 +1,17 @@
-﻿"""
-Nowcast ML adapter -- bridges the backend to the ML package.
-
-Follows the exact same stub/real pattern as PS 070's ml_adapter.py.
-Tries to import ml.inference.run_nowcast. If the import fails or
-ML_FORCE_STUB=true, falls back to deterministic stub responses.
-
-All callers should use run_nowcast -- never import ML directly
-from any other module.
-"""
 from __future__ import annotations
-
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-
-# -- Mode detection ---------------------------------------------------------
-
-def _detect_mode() -> str:
-    """Return 'real' if ML package is importable and not force-stubbed, else 'stub'."""
-    from app.core.config import get_settings
-    settings = get_settings()
-    if settings.ml_force_stub:
-        return "stub"
-    try:
-        import ml.inference  # noqa: F401
-        return "real"
-    except ImportError:
-        return "stub"
-
-
-_MODE: str | None = None  # resolved lazily on first call
-
-
-def _get_mode() -> str:
-    global _MODE
-    if _MODE is None:
-        _MODE = _detect_mode()
-        if _MODE == "stub":
-            logger.warning(
-                "[NOWCAST ADAPTER] Running in STUB MODE -- "
-                "ml.inference not importable or ML_FORCE_STUB=true. "
-                "All nowcasts are deterministic fixtures."
-            )
-        else:
-            logger.info("[NOWCAST ADAPTER] Running in REAL MODE -- ml.inference loaded.")
-    return _MODE
-
-
-# -- Stub responses ---------------------------------------------------------
-
 _NOWCAST_STUB: dict[str, Any] = {
     "nowcast_id": "stub-001",
-    "issued_at": "2026-09-26T15:00:00Z",
-    "valid_until": "2026-09-26T17:00:00Z",
+    "issued_at": "2026-11-20T12:00:00Z",
+    "valid_until": "2026-11-20T14:00:00Z",
+    "horizon_minutes": 120,
+    "interval_minutes": 15,
+    "timesteps": [15, 30, 45, 60, 75, 90, 105, 120],
     "cells": [
         {
             "cell_id": "TS-001",
@@ -76,63 +33,81 @@ _NOWCAST_STUB: dict[str, Any] = {
             ],
         },
     ],
-    "model": {"name": "ps72-nowcast-stub", "version": "0.1.0"},
+    "model": {"name": "ps72-nowcast-stub", "version": "0.1.0", "mode": "stub", "checkpoint_loaded": False},
     "data_sources_used": ["radar", "satellite", "lightning"],
 }
 
+_MODE: str | None = None
 
-# -- Public interface -------------------------------------------------------
+
+def _detect_mode() -> str:
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        if getattr(settings, "ml_force_stub", False):
+            return "stub"
+    except Exception:
+        pass
+
+    try:
+        from ml.inference import is_checkpoint_loaded
+        return "real" if is_checkpoint_loaded() else "stub"
+    except Exception:
+        return "stub"
+
+
+def _get_mode() -> str:
+    global _MODE
+    if _MODE is None:
+        _MODE = _detect_mode()
+        if _MODE == "stub":
+            logger.warning(
+                "[ML ADAPTER] Running in STUB MODE — valid trained checkpoint not loaded or ML_FORCE_STUB=true."
+            )
+        else:
+            logger.info("[ML ADAPTER] Running in REAL MODE — trained checkpoint loaded.")
+    return _MODE
+
+
+def get_stub_nowcast() -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    stub = dict(_NOWCAST_STUB)
+    stub["issued_at"] = now.isoformat()
+    stub["valid_until"] = (now + timedelta(minutes=120)).isoformat()
+    stub["model"] = {
+        "name": "ps72-nowcast-stub",
+        "version": "0.1.0",
+        "mode": "stub",
+        "checkpoint_loaded": False,
+    }
+    return stub
+
 
 def run_nowcast(
     radar_data: Any | None = None,
     satellite_data: Any | None = None,
     lightning_data: Any | None = None,
     nwp_data: Any | None = None,
+    include_demo_cells: bool = False,
 ) -> dict[str, Any]:
-    """
-    Run thunderstorm nowcast inference on fused multi-source data.
+    if _get_mode() == "real":
+        try:
+            from ml.inference import run_nowcast as _ml_nowcast
+            result = _ml_nowcast(
+                radar_data=radar_data,
+                satellite_data=satellite_data,
+                lightning_data=lightning_data,
+                nwp_data=nwp_data,
+                include_demo_cells=include_demo_cells,
+            )
+            if isinstance(result, dict) and "cells" in result:
+                return result
+        except Exception as exc:
+            logger.error(f"Inference error: {exc}")
 
-    Parameters
-    ----------
-    radar_data
-        Processed radar reflectivity / velocity arrays.
-    satellite_data
-        Satellite IR/WV channel arrays.
-    lightning_data
-        Lightning stroke location + intensity arrays.
-    nwp_data
-        NWP model fields (CAPE, CIN, wind shear, etc.).
-        All ignored in stub mode.
-
-    Returns
-    -------
-    dict with keys: nowcast_id, issued_at, valid_until, cells, model,
-                    data_sources_used
-    Each cell: cell_id, center, radius_km, severity, probability,
-               hazards, motion, forecast_positions
-    """
-    if _get_mode() == "stub":
-        logger.debug("[NOWCAST ADAPTER] nowcast -> stub")
-        return dict(_NOWCAST_STUB)
-
-    try:
-        from ml.inference import run_nowcast as _ml_nowcast  # type: ignore[import]
-        result = _ml_nowcast(
-            radar_data=radar_data,
-            satellite_data=satellite_data,
-            lightning_data=lightning_data,
-            nwp_data=nwp_data,
-        )
-        logger.debug("[NOWCAST ADAPTER] nowcast -> real inference")
-        return result
-    except Exception as exc:
-        logger.error(
-            "[NOWCAST ADAPTER] Real inference failed (%s), falling back to stub", exc
-        )
-        return dict(_NOWCAST_STUB)
+    return get_stub_nowcast()
 
 
 def reset_mode() -> None:
-    """Force re-detection of ML mode. Useful in tests."""
     global _MODE
     _MODE = None

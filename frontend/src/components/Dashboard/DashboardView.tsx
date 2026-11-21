@@ -1,6 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Cloud, Zap, AlertTriangle, MapPin, Settings2, Plus, Minus, Layers } from 'lucide-react';
 import { NowcastMap } from './NowcastMap';
+import { AlertTicker } from './AlertTicker';
+import { TimeSlider } from './TimeSlider';
 import { useNowcastStore } from '../../store/useNowcastStore';
 import { RISK_LEVEL_CONFIG, type RiskLevel } from '../../types/nowcast';
 
@@ -23,7 +25,7 @@ const MAP_LAYERS = [
 ] as const;
 
 export function DashboardView() {
-  const { alerts, cells, lightningStrokes, selectedLayer, setSelectedLayer, fetchActiveAlerts, fetchLatestNowcast, fetchRadarAndLightning } = useNowcastStore();
+  const { alerts, cells, lightningStrokes, selectedLayer, setSelectedLayer, forecastMinute, setForecastMinute, fetchActiveAlerts, fetchLatestNowcast, fetchRadarAndLightning } = useNowcastStore();
   const [isFullScreen, setIsFullScreen] = React.useState(false);
   
   React.useEffect(() => {
@@ -86,6 +88,7 @@ export function DashboardView() {
 
   return (
     <div className="flex flex-col h-full gap-3 p-4 overflow-y-auto">
+      <AlertTicker alerts={alerts} />
       {/* Top Stats Cards */}
       <div className="grid grid-cols-4 gap-2 shrink-0">
         {statsData.map((stat) => (
@@ -139,8 +142,8 @@ export function DashboardView() {
             <NowcastMap />
             
             {/* Overlay UI on top of Map */}
-            <div className="absolute top-4 right-4 z-[400] bg-black/60 backdrop-blur-md text-white px-3 py-1.5 rounded text-xs border border-white/10 shadow-lg">
-              Valid Time: 14:45 UTC (+15 min)
+            <div className="absolute top-4 right-4 z-[400] bg-black/70 backdrop-blur-md text-nowcast-accent px-3 py-1.5 rounded-md text-xs font-mono font-bold border border-nowcast-accent/30 shadow-lg">
+              {forecastMinute === 0 ? 'Radar Scan: Live (T = 0)' : `Forecast Valid: T + ${forecastMinute} min`}
             </div>
 
             {/* Map controls moved to NowcastMap */}
@@ -157,6 +160,9 @@ export function DashboardView() {
                 <span>100</span>
               </div>
             </div>
+          </div>
+          <div className="p-3 bg-nowcast-sidebar border-t border-nowcast-card shrink-0">
+            <TimeSlider currentMinute={forecastMinute} onChange={setForecastMinute} />
           </div>
         </div>
 

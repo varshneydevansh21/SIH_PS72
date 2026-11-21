@@ -1,0 +1,34 @@
+model:
+  name: ps72-nowcast
+  version: 1.0.0
+  architecture: UNet-ConvLSTM
+  checkpoint_path: ml/checkpoints/model.pt
+
+input:
+  channels: 7
+  height: 512
+  width: 512
+  history_timesteps: 4
+  channel_names:
+    - radar_reflectivity
+    - satellite_tir1
+    - satellite_wv
+    - tir1_wv_diff
+    - lightning_density
+    - nwp_cape
+    - nwp_cin
+
+output:
+  forecast_timesteps: 8
+  interval_minutes: 15
+  horizon_minutes: 120
+  output_channels: 2
+  target_names:
+    - predicted_reflectivity
+    - lightning_probability
+
+evaluation_targets:
+  csi_target: 0.55
+  pod_target: 0.70
+  far_target: 0.35
+  max_inference_latency_sec: 3.0

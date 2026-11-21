@@ -1,4 +1,3 @@
-"""GET /nowcast -- thunderstorm nowcast endpoints."""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -10,6 +9,7 @@ from app.services.nowcast_adapter import run_nowcast
 
 router = APIRouter(prefix="/nowcast", tags=["nowcast"])
 
+
 def serialize_nowcast(nowcast: Nowcast) -> dict:
     centroid_lat, centroid_lon, radius_km = 20.0, 80.0, 20.0
     try:
@@ -17,9 +17,7 @@ def serialize_nowcast(nowcast: Nowcast) -> dict:
             shape = to_shape(nowcast.affected_area)
             centroid_lon = shape.centroid.x
             centroid_lat = shape.centroid.y
-            # rough estimate of radius based on polygon bounds
             minx, miny, maxx, maxy = shape.bounds
-            # roughly convert degree to km (1 deg ~ 111km)
             radius_km = max(maxx - minx, maxy - miny) * 111 / 2
     except Exception:
         pass
@@ -32,36 +30,58 @@ def serialize_nowcast(nowcast: Nowcast) -> dict:
         "probability": nowcast.probability,
         "details": nowcast.details,
         "center": {"lat": centroid_lat, "lon": centroid_lon},
-        "radius_km": max(10, radius_km)
+        "radius_km": max(10, radius_km),
     }
 
+
 @router.get("/")
+@router.get("/predict")
+@router.get("/latest")
 async def get_latest_nowcast(db: AsyncSession = Depends(get_db)) -> dict:
-    """Return the latest thunderstorm nowcasts."""
-    stmt = select(Nowcast).order_by(Nowcast.run_time.desc()).limit(10)
-    result = await db.execute(stmt)
-    nowcasts = result.scalars().all()
-    
+    try:
+        stmt = select(Nowcast).order_by(Nowcast.run_time.desc()).limit(10)
+        result = await db.execute(stmt)
+        nowcasts = result.scalars().all()
+    except Exception:
+        nowcasts = []
+
+    if not nowcasts:
+        live = run_nowcast()
+        return {
+            "nowcasts": [],
+            "cells": live.get("cells", []),
+            "issued_at": live.get("issued_at"),
+            "valid_until": live.get("valid_until"),
+            "model": live.get("model"),
+            "count": len(live.get("cells", [])),
+        }
+
+    serialized = [serialize_nowcast(n) for n in nowcasts]
     return {
-        "nowcasts": [serialize_nowcast(n) for n in nowcasts],
-        "count": len(nowcasts)
+        "nowcasts": serialized,
+        "cells": serialized,
+        "issued_at": nowcasts[0].run_time.isoformat() if nowcasts[0].run_time else None,
+        "model": {"name": "ps72-unet-convlstm", "version": "1.0.0", "source": "database"},
+        "count": len(serialized),
     }
+
 
 @router.get("/{nowcast_id}")
 async def get_nowcast_by_id(nowcast_id: str, db: AsyncSession = Depends(get_db)) -> dict:
-    """Return a specific nowcast by ID."""
-    stmt = select(Nowcast).where(Nowcast.id == nowcast_id)
-    result = await db.execute(stmt)
-    nowcast = result.scalars().first()
-    
+    try:
+        stmt = select(Nowcast).where(Nowcast.id == nowcast_id)
+        result = await db.execute(stmt)
+        nowcast = result.scalars().first()
+    except Exception:
+        nowcast = None
+
     if not nowcast:
         raise HTTPException(status_code=404, detail="Nowcast not found")
-        
+
     return serialize_nowcast(nowcast)
+
 
 @router.post("/trigger")
 async def trigger_nowcast() -> dict:
-    """Manually trigger a new nowcast cycle."""
-    # Run data fusion + ML inference pipeline (stubbed)
     result = run_nowcast()
     return {"status": "ok", "nowcast": result}

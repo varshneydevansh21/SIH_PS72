@@ -15,9 +15,11 @@ import asyncio
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import logging
 import httpx
 import numpy as np
-from loguru import logger
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.ingestion.base import BaseIngestor
@@ -41,23 +43,24 @@ class DWRClient(BaseIngestor):
     def __init__(self):
         super().__init__(source_name="IMD_DWR_Radar")
         self.settings = get_settings()
+        api_url = getattr(self.settings, "imd_radar_api_url", "") or "http://localhost:8001"
+        api_key = getattr(self.settings, "imd_radar_api_key", "")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._client = httpx.AsyncClient(
-            base_url=self.settings.IMD_RADAR_API_URL,
+            base_url=api_url,
             timeout=60.0,
-            headers={"Authorization": f"Bearer {self.settings.IMD_RADAR_API_KEY}"},
+            headers=headers,
+        )
+        from app.ingestion.radar.processor import RadarProcessor
+        self.processor = RadarProcessor(
+            target_h=self.settings.pilot_grid_h,
+            target_w=self.settings.pilot_grid_w,
         )
 
     async def fetch(self) -> Any:
-        """
-        Fetch the latest radar volume scan.
-
-        In production: hits the IMD radar API.
-        In development: loads a local sample file from data/raw/radar/.
-
-        Returns:
-            Raw bytes of the radar file (HDF5/NetCDF), or None on failure.
-        """
-        if self.settings.APP_ENV == "development" and not self.settings.IMD_RADAR_API_URL:
+        app_env = getattr(self.settings, "app_env", "development")
+        api_url = getattr(self.settings, "imd_radar_api_url", "")
+        if app_env == "development" or not api_url:
             return await self._fetch_local_sample()
 
         try:

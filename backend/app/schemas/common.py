@@ -1,4 +1,3 @@
-﻿"""Shared Pydantic schemas used across multiple endpoints."""
 from pydantic import BaseModel
 
 

@@ -1,4 +1,4 @@
-﻿"""POST /ingest -- data ingestion trigger endpoints."""
+from datetime import datetime, timezone
 from fastapi import APIRouter
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
@@ -6,27 +6,64 @@ router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 @router.post("/radar")
 async def ingest_radar() -> dict:
-    """Trigger radar data ingestion for the latest available scans."""
-    # TODO: invoke RadarIngestor.fetch_one() or consume from Kafka topic
-    return {"status": "accepted", "source": "radar", "message": "Ingestion queued"}
+    from app.ingestion.radar.processor import RadarProcessor
+
+    processor = RadarProcessor()
+    grid, mask = processor.process()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    return {
+        "status": "success",
+        "source": "radar",
+        "timestamp": now_iso,
+        "grid_shape": list(grid.shape),
+        "max_dbz_normalized": float(grid.max()),
+        "has_observations": bool(mask.max() > 0),
+    }
 
 
 @router.post("/lightning")
 async def ingest_lightning() -> dict:
-    """Trigger lightning data ingestion."""
-    # TODO: invoke LightningIngestor or consume from Kafka topic
-    return {"status": "accepted", "source": "lightning", "message": "Ingestion queued"}
+    from app.ingestion.lightning.processor import LightningProcessor
+
+    processor = LightningProcessor()
+    grid, mask = processor.process()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    return {
+        "status": "success",
+        "source": "lightning",
+        "timestamp": now_iso,
+        "grid_shape": list(grid.shape),
+        "has_observations": bool(mask.max() > 0),
+    }
 
 
 @router.post("/satellite")
 async def ingest_satellite() -> dict:
-    """Trigger satellite imagery ingestion."""
-    # TODO: invoke SatelliteIngestor
-    return {"status": "accepted", "source": "satellite", "message": "Ingestion queued"}
+    from app.ingestion.satellite.insat_client import INSATClient
+
+    client = INSATClient()
+    raw = await client.fetch()
+    processed = await client.process(raw)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    return {
+        "status": "success",
+        "source": "satellite",
+        "timestamp": now_iso,
+        "channels": list(processed.keys()) if isinstance(processed, dict) else [],
+    }
 
 
 @router.post("/nwp")
 async def ingest_nwp() -> dict:
-    """Trigger NWP model data ingestion."""
-    # TODO: invoke NWPIngestor
-    return {"status": "accepted", "source": "nwp", "message": "Ingestion queued"}
+    from app.ingestion.nwp.gfs_client import GFSClient
+
+    client = GFSClient()
+    raw = await client.fetch()
+    processed = await client.process(raw)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    return {
+        "status": "success",
+        "source": "nwp",
+        "timestamp": now_iso,
+        "variables": list(processed.keys()) if isinstance(processed, dict) else [],
+    }
