@@ -104,6 +104,8 @@ class ConnectionManager:
         for ws in dead_connections:
             self.disconnect(ws)
 
+    broadcast_all = broadcast
+
     @property
     def active_count(self) -> int:
         return len(self._active)

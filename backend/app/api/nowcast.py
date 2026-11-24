@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.models.nowcast import Nowcast
 from app.services.nowcast_adapter import run_nowcast
 from app.services.raster_service import RasterService
+from app.services.operational_runner import operational_runner
 
 router = APIRouter(prefix="/nowcast", tags=["nowcast"])
 raster_service = RasterService()
@@ -85,6 +86,11 @@ async def get_nowcast_raster(
     return Response(content=png_bytes, media_type="image/png")
 
 
+@router.get("/status")
+async def get_operational_status() -> dict:
+    return operational_runner.get_status()
+
+
 @router.get("/{nowcast_id}")
 async def get_nowcast_by_id(nowcast_id: str, db: AsyncSession = Depends(get_db)) -> dict:
     try:
@@ -101,6 +107,9 @@ async def get_nowcast_by_id(nowcast_id: str, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/trigger")
-async def trigger_nowcast() -> dict:
-    result = run_nowcast()
-    return {"status": "ok", "nowcast": result}
+async def trigger_nowcast(
+    include_demo: bool = Query(default=True),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    result = await operational_runner.execute_cycle(include_demo_cells=include_demo, db=db)
+    return {"status": "ok", "cycle": result}

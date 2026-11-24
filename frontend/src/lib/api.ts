@@ -50,4 +50,14 @@ export const getReplayEvent = async (eventId: string) => {
   return data;
 };
 
+export const triggerNowcast = async (includeDemo: boolean = true) => {
+  const { data } = await api.post(`/nowcast/trigger?include_demo=${includeDemo}`);
+  return data;
+};
+
+export const getNowcastStatus = async () => {
+  const { data } = await api.get('/nowcast/status');
+  return data;
+};
+
 export default api;

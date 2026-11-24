@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Cloud, Zap, AlertTriangle, MapPin, Settings2, Plus, Minus, Layers } from 'lucide-react';
+import { Cloud, Zap, AlertTriangle, MapPin, RefreshCw } from 'lucide-react';
 import { NowcastMap } from './NowcastMap';
 import { AlertTicker } from './AlertTicker';
 import { TimeSlider } from './TimeSlider';
 import { useNowcastStore } from '../../store/useNowcastStore';
 import { RISK_LEVEL_CONFIG, type RiskLevel } from '../../types/nowcast';
 import { wsClient } from '../../lib/ws';
+import { triggerNowcast } from '../../lib/api';
 
 function formatRelativeTime(iso: string): string {
   const diff = new Date(iso).getTime() - Date.now();
@@ -28,6 +29,18 @@ const MAP_LAYERS = [
 export function DashboardView() {
   const { alerts, cells, lightningStrokes, selectedLayer, setSelectedLayer, forecastMinute, setForecastMinute, fetchActiveAlerts, fetchLatestNowcast, fetchRadarAndLightning } = useNowcastStore();
   const [isFullScreen, setIsFullScreen] = React.useState(false);
+  const [isTriggering, setIsTriggering] = React.useState(false);
+
+  const handleTrigger = async () => {
+    setIsTriggering(true);
+    try {
+      await triggerNowcast(true);
+      await Promise.all([fetchActiveAlerts(), fetchLatestNowcast(), fetchRadarAndLightning()]);
+    } catch {
+    } finally {
+      setIsTriggering(false);
+    }
+  };
   
   React.useEffect(() => {
     fetchActiveAlerts();
@@ -149,6 +162,14 @@ export function DashboardView() {
               </button>
             ))}
             <div className="flex-1" />
+            <button
+              onClick={handleTrigger}
+              disabled={isTriggering}
+              className="px-3 py-1.5 rounded-md text-sm font-medium bg-nowcast-accent/10 text-nowcast-accent border border-nowcast-accent/30 hover:bg-nowcast-accent/20 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isTriggering ? 'animate-spin' : ''}`} />
+              {isTriggering ? 'Running...' : 'Run Cycle'}
+            </button>
             <button 
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="px-3 py-1.5 rounded-md text-sm font-medium text-nowcast-textMuted hover:bg-nowcast-card border border-nowcast-card transition-colors flex items-center gap-2"

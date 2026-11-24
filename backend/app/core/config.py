@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     nowcast_horizon_minutes: int = 120
     nowcast_interval_minutes: int = 15
     alert_threshold_probability: float = 0.60
+    scheduler_enabled: bool = False
+    scheduler_interval_seconds: int = 900
 
     @property
     def cors_origins_list(self) -> list[str]:

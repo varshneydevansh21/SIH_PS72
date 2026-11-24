@@ -38,13 +38,13 @@ services:
       DATABASE_URL: postgresql+asyncpg://stormsight:stormsight_secret@db:5432/stormsight
       DATABASE_SYNC_URL: postgresql+psycopg2://stormsight:stormsight_secret@db:5432/stormsight
       REDIS_URL: redis://redis:6379/0
-      PYTHONPATH: /ml:/app
+      PYTHONPATH: /app
       DEBUG: "false"
     ports:
       - "8000:8000"
     volumes:
+      - ../ml:/app/ml
       - ../data:/data
-      - ../ml/checkpoints:/ml/checkpoints
     depends_on:
       db:
         condition: service_healthy

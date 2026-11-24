@@ -53,13 +53,13 @@ services:
       DATABASE_SYNC_URL: postgresql+psycopg2://stormsight:stormsight_secret@db:5432/stormsight
       REDIS_URL: redis://redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      PYTHONPATH: /ml:/app
+      PYTHONPATH: /app
       DEBUG: "true"
     ports:
       - "8001:8000"
     volumes:
       - .:/app
-      - ../ml:/ml
+      - ../ml:/app/ml
       - ../data:/data
     depends_on:
       db:

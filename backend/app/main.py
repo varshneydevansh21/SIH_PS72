@@ -22,21 +22,18 @@ from app.api.lightning import router as lightning_router
 from app.api.metrics import router as metrics_router
 from app.api.replay import router as replay_router
 from app.api.ws import router as ws_router
+from app.services.operational_runner import operational_runner
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Manage DB connection pool and background services lifecycle."""
-    # -- Startup -----------------------------------------------------------
-    # TODO: initialise Redis connection pool
-    # TODO: start Kafka consumer tasks for radar/lightning streams
+    if settings.scheduler_enabled:
+        operational_runner.start_scheduler(interval_seconds=settings.scheduler_interval_seconds)
     yield
-    # -- Shutdown ----------------------------------------------------------
+    operational_runner.stop_scheduler()
     await dispose_engine()
-    # TODO: close Redis pool
-    # TODO: cancel Kafka consumer tasks
 
 
 def create_app() -> FastAPI:
