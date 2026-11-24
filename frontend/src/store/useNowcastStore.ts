@@ -3,6 +3,7 @@ import { type WeatherAlert } from '../types/nowcast';
 import { getAlerts, getNowcast, getLightningRecent } from '../lib/api';
 
 export type MapLayer = 'thunderstorm' | 'lightning' | 'composite' | 'observations';
+export type OperationalMode = 'LIVE' | 'HISTORICAL_REPLAY' | 'OFFLINE_DEMO';
 
 interface NowcastState {
   cells: any[];
@@ -11,6 +12,7 @@ interface NowcastState {
   lightningStrokes: any[];
   timestamp: string | null;
   selectedLayer: MapLayer;
+  operationalMode: OperationalMode;
   mapCenter: [number, number] | null;
   mapZoom: number | null;
   forecastMinute: number;
@@ -20,6 +22,8 @@ interface NowcastState {
   setNowcastData: (data: any) => void;
   setAlerts: (alerts: WeatherAlert[]) => void;
   setSelectedLayer: (layer: MapLayer) => void;
+  setOperationalMode: (mode: OperationalMode) => void;
+  loadHistoricalEvent: (eventData: any) => void;
   setMapCenter: (center: [number, number] | null, zoom?: number) => void;
   setForecastMinute: (minute: number) => void;
 
@@ -35,6 +39,7 @@ export const useNowcastStore = create<NowcastState>((set, get) => ({
   lightningStrokes: [],
   timestamp: null,
   selectedLayer: 'thunderstorm',
+  operationalMode: 'OFFLINE_DEMO',
   mapCenter: null,
   mapZoom: null,
   forecastMinute: 0,
@@ -44,6 +49,35 @@ export const useNowcastStore = create<NowcastState>((set, get) => ({
   setNowcastData: (data) => set({ cells: data.cells || [], timestamp: data.issued_at }),
   setAlerts: (alerts) => set({ alerts }),
   setSelectedLayer: (layer) => set({ selectedLayer: layer }),
+  setOperationalMode: (mode) => set({ operationalMode: mode }),
+  loadHistoricalEvent: (eventData) => {
+    const cells = eventData.cells || [];
+    const syntheticAlerts = cells.map((c: any) => ({
+      id: `alert-${c.cell_id}`,
+      title: `${c.severity?.toUpperCase() || 'SEVERE'} Thunderstorm Warning`,
+      description: `Historical benchmark storm cell ${c.cell_id} with peak reflectivity of ${c.max_dbz} dBZ.`,
+      riskLevel: (c.severity || 'severe').toLowerCase(),
+      latitude: c.center?.lat || 28.61,
+      longitude: c.center?.lon || 77.23,
+      radius_km: c.radius_km || 35,
+      issuedAt: eventData.date || new Date().toISOString(),
+      validUntil: new Date(Date.now() + 2 * 3600000).toISOString(),
+      eventType: 'THUNDERSTORM',
+      probability: c.probability || 0.9,
+      polygon: c.polygon,
+      imd_color: c.severity === 'extreme' ? 'RED' : 'ORANGE',
+    }));
+    set({
+      cells,
+      alerts: syntheticAlerts,
+      lightningStrokes: eventData.lightning_strokes || [],
+      timestamp: eventData.date,
+      operationalMode: 'HISTORICAL_REPLAY',
+      forecastMinute: 0,
+      mapCenter: eventData.center ? [eventData.center.lat, eventData.center.lon] : null,
+      mapZoom: 8,
+    });
+  },
   setMapCenter: (center, zoom) => set((state) => ({
     mapCenter: center,
     mapZoom: zoom ?? state.mapZoom,
@@ -83,14 +117,22 @@ export const useNowcastStore = create<NowcastState>((set, get) => ({
   fetchLatestNowcast: async () => {
     try {
       const data = await getNowcast();
+      const isReal = data?.model?.checkpoint_loaded === true;
+      const opMode: OperationalMode = isReal ? 'LIVE' : 'OFFLINE_DEMO';
       if (data && Array.isArray(data.cells)) {
-        set({
+        set((state) => ({
           cells: data.cells,
           timestamp: data.issued_at || new Date().toISOString(),
+          operationalMode: state.operationalMode === 'HISTORICAL_REPLAY' ? 'HISTORICAL_REPLAY' : opMode,
           error: null,
-        });
+        }));
       } else {
-        set({ cells: [], timestamp: new Date().toISOString(), error: null });
+        set((state) => ({
+          cells: [],
+          timestamp: new Date().toISOString(),
+          operationalMode: state.operationalMode === 'HISTORICAL_REPLAY' ? 'HISTORICAL_REPLAY' : opMode,
+          error: null,
+        }));
       }
     } catch (err: any) {
       set({ cells: [], error: 'Nowcast service unreachable' });

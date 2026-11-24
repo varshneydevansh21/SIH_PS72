@@ -9,6 +9,7 @@ export function Topbar() {
   const [selectedRegion, setSelectedRegion] = useState('all');
   const setMapCenter = useNowcastStore(state => state.setMapCenter);
   const alerts = useNowcastStore(state => state.alerts);
+  const operationalMode = useNowcastStore(state => state.operationalMode);
   
   const hasHighRiskAlerts = alerts.some(alert => ['high', 'severe', 'extreme'].includes(alert.riskLevel));
   
@@ -89,13 +90,31 @@ export function Topbar() {
           {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}
         </div>
         
-        <div className="flex items-center gap-2 px-3 py-1 bg-nowcast-success/10 border border-nowcast-success/20 rounded-full">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-nowcast-success opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-nowcast-success"></span>
-          </span>
-          <span className="text-xs font-medium text-nowcast-success">Live</span>
-        </div>
+        {operationalMode === 'LIVE' && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-nowcast-success/10 border border-nowcast-success/20 rounded-full">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-nowcast-success opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-nowcast-success"></span>
+            </span>
+            <span className="text-xs font-medium text-nowcast-success">Live Nowcast</span>
+          </div>
+        )}
+        {operationalMode === 'OFFLINE_DEMO' && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full">
+            <span className="relative flex h-2 w-2">
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+            </span>
+            <span className="text-xs font-medium text-amber-400">Offline Pilot (Demo)</span>
+          </div>
+        )}
+        {operationalMode === 'HISTORICAL_REPLAY' && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full">
+            <span className="relative flex h-2 w-2">
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-400"></span>
+            </span>
+            <span className="text-xs font-medium text-blue-400">Historical Replay</span>
+          </div>
+        )}
         
         <button className="relative p-2 rounded-full hover:bg-nowcast-card transition-colors">
           <Bell className="w-5 h-5 text-nowcast-textMuted" />

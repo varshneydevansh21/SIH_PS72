@@ -40,4 +40,14 @@ export const getMetrics = async () => {
   return data;
 };
 
+export const getReplayEvents = async () => {
+  const { data } = await api.get('/replay/events');
+  return data;
+};
+
+export const getReplayEvent = async (eventId: string) => {
+  const { data } = await api.get(`/replay/events/${eventId}`);
+  return data;
+};
+
 export default api;

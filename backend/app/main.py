@@ -20,6 +20,7 @@ from app.api.alerts import router as alerts_router
 from app.api.radar import router as radar_router
 from app.api.lightning import router as lightning_router
 from app.api.metrics import router as metrics_router
+from app.api.replay import router as replay_router
 from app.api.ws import router as ws_router
 
 settings = get_settings()
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(radar_router)
     api_v1.include_router(lightning_router)
     api_v1.include_router(metrics_router)
+    api_v1.include_router(replay_router)
     app.include_router(api_v1)
 
     # -- Legacy Root Aliases -----------------------------------------------
@@ -79,6 +81,7 @@ def create_app() -> FastAPI:
     app.include_router(radar_router)
     app.include_router(lightning_router)
     app.include_router(metrics_router)
+    app.include_router(replay_router)
     app.include_router(ws_router)
 
     return app
