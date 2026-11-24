@@ -1,54 +1,37 @@
-﻿"""WebSocket endpoint for real-time nowcast push to frontend."""
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+﻿from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
 import logging
+from app.websockets.live_feed import ws_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["websocket"])
 
 
-class ConnectionManager:
-    """Manages active WebSocket connections."""
-
-    def __init__(self):
-        self.active_connections: list[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        logger.info("WebSocket client connected. Total: %d", len(self.active_connections))
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-        logger.info("WebSocket client disconnected. Total: %d", len(self.active_connections))
-
-    async def broadcast(self, message: dict):
-        """Broadcast a message to all connected clients."""
-        data = json.dumps(message)
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(data)
-            except Exception:
-                pass  # client may have disconnected
+async def broadcast_nowcast(data: dict):
+    await ws_manager.send_to_channel("nowcast", data)
+    await ws_manager.broadcast(data)
 
 
-manager = ConnectionManager()
+async def broadcast_alerts(data: dict):
+    await ws_manager.send_to_channel("alerts", data)
+    await ws_manager.broadcast(data)
 
 
 @router.websocket("/ws/nowcast")
+@router.websocket("/ws/live")
 async def nowcast_ws(websocket: WebSocket):
-    """WebSocket endpoint for streaming nowcast updates.
-
-    Clients connect here to receive real-time thunderstorm alerts
-    and nowcast updates as they are generated.
-    """
-    await manager.connect(websocket)
+    raw_channels = websocket.query_params.get("channels", "nowcast,alerts,radar,lightning")
+    channels = [ch.strip() for ch in raw_channels.split(",") if ch.strip()]
+    await ws_manager.connect(websocket, channels)
     try:
         while True:
-            # Keep connection alive; real updates come from broadcast()
             data = await websocket.receive_text()
-            # Echo for now; TODO: handle client messages (e.g., bbox filter)
-            await websocket.send_text(json.dumps({"echo": data}))
+            try:
+                parsed = json.loads(data)
+                if parsed.get("type") == "ping":
+                    await websocket.send_text(json.dumps({"type": "pong"}))
+            except Exception:
+                pass
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        ws_manager.disconnect(websocket)

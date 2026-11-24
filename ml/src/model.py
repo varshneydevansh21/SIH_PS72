@@ -60,8 +60,8 @@ class ConvLSTMCell(nn.Module):
 class UNetConvLSTM(nn.Module):
     def __init__(
         self,
-        in_channels=7,
-        out_channels=2,
+        in_channels=14,
+        out_channels=3,
         hidden_channels=64,
         t_in=4,
         t_out=8,
@@ -73,6 +73,7 @@ class UNetConvLSTM(nn.Module):
         self.t_in = t_in
         self.t_out = t_out
 
+        # Encoder
         self.enc1 = DoubleConv(in_channels, 32)
         self.pool1 = nn.MaxPool2d(2)
 
@@ -84,8 +85,27 @@ class UNetConvLSTM(nn.Module):
 
         self.bottleneck = DoubleConv(128, hidden_channels)
 
+        # Spatio-Temporal Core
         self.convlstm = ConvLSTMCell(hidden_channels, hidden_channels, kernel_size=3)
 
+        # Skip Connection Recurrent Evolvers (allows multi-scale details to evolve over time)
+        self.evolve3 = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+        self.evolve2 = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+        self.evolve1 = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+
+        # Decoder
         self.up3 = nn.ConvTranspose2d(hidden_channels, 128, kernel_size=2, stride=2)
         self.dec3 = DoubleConv(128 + 128, 64)
 
@@ -95,7 +115,9 @@ class UNetConvLSTM(nn.Module):
         self.up1 = nn.ConvTranspose2d(32, 32, kernel_size=2, stride=2)
         self.dec1 = DoubleConv(32 + 32, 32)
 
+        # Decoupled Multi-Task Heads
         self.radar_head = nn.Conv2d(32, 1, kernel_size=1)
+        self.occurrence_head = nn.Conv2d(32, 1, kernel_size=1)
         self.lightning_head = nn.Conv2d(32, 1, kernel_size=1)
 
     def forward(self, x):
@@ -131,9 +153,9 @@ class UNetConvLSTM(nn.Module):
             x = x[:, -self.t_in :, :, :, :]
 
         lstm_state = None
-        last_e1 = None
-        last_e2 = None
-        last_e3 = None
+        cur_e1 = None
+        cur_e2 = None
+        cur_e3 = None
         h = None
 
         for t in range(self.t_in):
@@ -150,39 +172,51 @@ class UNetConvLSTM(nn.Module):
             b = self.bottleneck(p3)
             h, lstm_state = self.convlstm(b, lstm_state)
 
-            last_e1 = e1
-            last_e2 = e2
-            last_e3 = e3
+            cur_e1 = e1
+            cur_e2 = e2
+            cur_e3 = e3
 
         predictions = []
 
         for step in range(self.t_out):
             h, lstm_state = self.convlstm(h, lstm_state)
 
+            # Evolve skip features over lead times
+            cur_e3 = self.evolve3(cur_e3)
+            cur_e2 = self.evolve2(cur_e2)
+            cur_e1 = self.evolve1(cur_e1)
+
             d3 = self.up3(h)
-            if d3.shape[2:] != last_e3.shape[2:]:
+            if d3.shape[2:] != cur_e3.shape[2:]:
                 d3 = F.interpolate(
-                    d3, size=last_e3.shape[2:], mode="bilinear", align_corners=False
+                    d3, size=cur_e3.shape[2:], mode="bilinear", align_corners=False
                 )
-            d3 = self.dec3(torch.cat([d3, last_e3], dim=1))
+            d3 = self.dec3(torch.cat([d3, cur_e3], dim=1))
 
             d2 = self.up2(d3)
-            if d2.shape[2:] != last_e2.shape[2:]:
+            if d2.shape[2:] != cur_e2.shape[2:]:
                 d2 = F.interpolate(
-                    d2, size=last_e2.shape[2:], mode="bilinear", align_corners=False
+                    d2, size=cur_e2.shape[2:], mode="bilinear", align_corners=False
                 )
-            d2 = self.dec2(torch.cat([d2, last_e2], dim=1))
+            d2 = self.dec2(torch.cat([d2, cur_e2], dim=1))
 
             d1 = self.up1(d2)
-            if d1.shape[2:] != last_e1.shape[2:]:
+            if d1.shape[2:] != cur_e1.shape[2:]:
                 d1 = F.interpolate(
-                    d1, size=last_e1.shape[2:], mode="bilinear", align_corners=False
+                    d1, size=cur_e1.shape[2:], mode="bilinear", align_corners=False
                 )
-            d1 = self.dec1(torch.cat([d1, last_e1], dim=1))
+            d1 = self.dec1(torch.cat([d1, cur_e1], dim=1))
 
-            pred_radar = torch.relu(self.radar_head(d1))
+            pred_radar = torch.sigmoid(self.radar_head(d1))
+            pred_occurrence = torch.sigmoid(self.occurrence_head(d1))
             pred_lightning = torch.sigmoid(self.lightning_head(d1))
-            pred_step = torch.cat([pred_radar, pred_lightning], dim=1)
+
+            if self.out_channels == 1:
+                pred_step = pred_radar
+            elif self.out_channels == 2:
+                pred_step = torch.cat([pred_radar, pred_lightning], dim=1)
+            else:
+                pred_step = torch.cat([pred_radar, pred_occurrence, pred_lightning], dim=1)
 
             predictions.append(pred_step)
 

@@ -13,11 +13,13 @@ Supports:
 """
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from loguru import logger
+
+logger = logging.getLogger(__name__)
 
 
 websocket_router = APIRouter()
@@ -52,18 +54,14 @@ class ConnectionManager:
             if ch in self._subscriptions:
                 self._subscriptions[ch].add(websocket)
 
-        logger.info(
-            "Client connected (total={}). Channels: {}",
-            len(self._active),
-            channels,
-        )
+        logger.info(f"Client connected (total={len(self._active)}). Channels: {channels}")
 
     def disconnect(self, websocket: WebSocket):
         """Remove a client from all subscriptions."""
         self._active.discard(websocket)
         for subscribers in self._subscriptions.values():
             subscribers.discard(websocket)
-        logger.info("Client disconnected (remaining={})", len(self._active))
+        logger.info(f"Client disconnected (remaining={len(self._active)})")
 
     async def send_to_channel(self, channel: str, data: dict):
         """Push a message to all clients subscribed to a channel."""
@@ -154,7 +152,7 @@ async def websocket_live_feed(websocket: WebSocket):
                     for ch in new_channels:
                         if ch in ws_manager._subscriptions:
                             ws_manager._subscriptions[ch].add(websocket)
-                    logger.info("Client updated subscriptions: +{}", new_channels)
+                    logger.info(f"Client updated subscriptions: +{new_channels}")
             except json.JSONDecodeError:
                 pass  # Ignore non-JSON messages
 
