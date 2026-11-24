@@ -14,6 +14,15 @@ export interface WeatherAlert {
   validUntil: string;
   eventType: 'THUNDERSTORM' | 'EXTREME_LIGHTNING' | 'HAILSTORM' | 'SQUALL';
   probability: number;
+  polygon?: [number, number][];
+  imd_color?: string;
+  impacts?: Array<{
+    location_name: string;
+    district: string;
+    distance_km: number;
+    eta_minutes: number;
+    warning_text: string;
+  }>;
 }
 
 /** Visual configuration for each risk level. */

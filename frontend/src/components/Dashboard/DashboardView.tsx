@@ -5,6 +5,7 @@ import { AlertTicker } from './AlertTicker';
 import { TimeSlider } from './TimeSlider';
 import { useNowcastStore } from '../../store/useNowcastStore';
 import { RISK_LEVEL_CONFIG, type RiskLevel } from '../../types/nowcast';
+import { wsClient } from '../../lib/ws';
 
 function formatRelativeTime(iso: string): string {
   const diff = new Date(iso).getTime() - Date.now();
@@ -32,14 +33,32 @@ export function DashboardView() {
     fetchActiveAlerts();
     fetchLatestNowcast();
     fetchRadarAndLightning();
-    
-    // Auto-refresh every 5 minutes
+
+    wsClient.connect();
+    const unsubWs = wsClient.subscribe((msg: any) => {
+      if (!msg) return;
+      if (msg.cells || msg.nowcast_id) {
+        useNowcastStore.getState().setNowcastData(msg);
+      }
+      if (msg.alerts) {
+        useNowcastStore.getState().fetchActiveAlerts();
+      }
+      if (msg.strokes) {
+        useNowcastStore.getState().fetchRadarAndLightning();
+      }
+    });
+
     const interval = setInterval(() => {
       fetchActiveAlerts();
       fetchLatestNowcast();
       fetchRadarAndLightning();
     }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      unsubWs();
+      wsClient.disconnect();
+    };
   }, [fetchActiveAlerts, fetchLatestNowcast, fetchRadarAndLightning]);
   
   const sortedAlerts = useMemo(() => {

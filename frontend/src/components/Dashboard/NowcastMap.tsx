@@ -1,18 +1,31 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { MapContainer, TileLayer, Circle, Popup, useMap, CircleMarker, Polyline } from 'react-leaflet';
+import {
+  MapContainer,
+  TileLayer,
+  Circle,
+  Polygon,
+  Popup,
+  useMap,
+  CircleMarker,
+  Polyline,
+  ImageOverlay,
+} from 'react-leaflet';
 import { useNowcastStore } from '../../store/useNowcastStore';
 import {
   type WeatherAlert,
   type RiskLevel,
   RISK_LEVEL_CONFIG,
 } from '../../types/nowcast';
-import { AlertTriangle, Shield, Zap, CloudLightning, X, Plus, Minus } from 'lucide-react';
+import { AlertTriangle, Zap, CloudLightning, Plus, Minus } from 'lucide-react';
 
-// India center
-const MAP_CENTER = [20.5937, 78.9629] as [number, number];
-const ZOOM = 5;
+const MAP_CENTER = [28.6139, 77.2090] as [number, number];
+const ZOOM = 7;
 
-/** Resolve the icon component by event type. */
+const DELHI_NCR_BOUNDS: [[number, number], [number, number]] = [
+  [24.0, 72.0],
+  [33.2, 82.5],
+];
+
 function getEventIcon(eventType: string) {
   switch (eventType) {
     case 'EXTREME_LIGHTNING':
@@ -25,7 +38,6 @@ function getEventIcon(eventType: string) {
   }
 }
 
-/** Format a relative time string from an ISO timestamp. */
 function formatRelativeTime(iso: string): string {
   const diff = new Date(iso).getTime() - Date.now();
   if (diff <= 0) return 'Expired';
@@ -35,7 +47,6 @@ function formatRelativeTime(iso: string): string {
   return `${hours}h ${minutes % 60}m remaining`;
 }
 
-/** Fit the map to show all alert and cell markers. */
 function MapUpdater({ cells, alerts }: { cells: any[]; alerts: WeatherAlert[] }) {
   const map = useMap();
   const { mapCenter, mapZoom, setMapCenter } = useNowcastStore();
@@ -53,28 +64,35 @@ function CustomZoomControl() {
   const map = useMap();
   return (
     <div className="absolute top-4 left-4 z-[400] flex flex-col bg-nowcast-sidebar/90 backdrop-blur-md border border-nowcast-card rounded-md shadow-lg overflow-hidden">
-      <button onClick={(e) => { e.preventDefault(); map.zoomIn(); }} className="p-2 hover:bg-nowcast-card transition-colors border-b border-nowcast-card">
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          map.zoomIn();
+        }}
+        className="p-2 hover:bg-nowcast-card transition-colors border-b border-nowcast-card"
+      >
         <Plus className="w-4 h-4 text-nowcast-text" />
       </button>
-      <button onClick={(e) => { e.preventDefault(); map.zoomOut(); }} className="p-2 hover:bg-nowcast-card transition-colors">
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          map.zoomOut();
+        }}
+        className="p-2 hover:bg-nowcast-card transition-colors"
+      >
         <Minus className="w-4 h-4 text-nowcast-text" />
       </button>
     </div>
   );
 }
 
-
-// ────────────────────────────────────────────────────────────────
-//  NowcastMap – primary export
-// ────────────────────────────────────────────────────────────────
 export function NowcastMap() {
-  const { cells, alerts, lightningStrokes, forecastMinute } = useNowcastStore();
+  const { cells, alerts, lightningStrokes, forecastMinute, selectedLayer, timestamp } = useNowcastStore();
   const [loading, setLoading] = useState(true);
-  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+  const [dismissedAlerts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // Short delay to show the loading animation, then reveal the map
-    const timer = setTimeout(() => setLoading(false), 1200);
+    const timer = setTimeout(() => setLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
 
@@ -82,6 +100,14 @@ export function NowcastMap() {
     () => alerts.filter((a) => !dismissedAlerts.has(a.id)),
     [alerts, dismissedAlerts],
   );
+
+  const rasterUrl = useMemo(() => {
+    const base = (import.meta as any).env?.VITE_API_BASE_URL || '/api/v1';
+    return `${base}/nowcast/raster?minute=${forecastMinute}&layer=${selectedLayer}&ts=${encodeURIComponent(timestamp || '')}`;
+  }, [forecastMinute, selectedLayer, timestamp]);
+
+  const showLightning = selectedLayer === 'lightning' || selectedLayer === 'composite' || selectedLayer === 'observations';
+  const showCells = selectedLayer === 'thunderstorm' || selectedLayer === 'composite' || selectedLayer === 'observations';
 
   return (
     <div className="h-full w-full bg-nowcast-bg relative">
@@ -97,183 +123,239 @@ export function NowcastMap() {
           className="map-tiles"
         />
 
-        {/* ── Warning Alert Zones ── */}
+        {selectedLayer !== 'observations' && (
+          <ImageOverlay
+            url={rasterUrl}
+            bounds={DELHI_NCR_BOUNDS}
+            opacity={0.62}
+            zIndex={200}
+          />
+        )}
+
         {visibleAlerts.map((alert) => {
-          const cfg = RISK_LEVEL_CONFIG[alert.riskLevel];
+          const cfg = RISK_LEVEL_CONFIG[alert.riskLevel] || RISK_LEVEL_CONFIG.moderate;
+          const hasPolygon = Array.isArray(alert.polygon) && alert.polygon.length >= 3;
+          const polygonPositions: [number, number][] = hasPolygon
+            ? alert.polygon!.map(([lon, lat]) => [lat, lon])
+            : [];
+
           return (
             <React.Fragment key={alert.id}>
-              {/* Outer glow ring for severe/extreme */}
-              {(alert.riskLevel === 'extreme' || alert.riskLevel === 'severe') && (
-                <Circle
-                  center={[alert.latitude, alert.longitude]}
-                  radius={alert.radius_km * 1000 * 1.3}
+              {hasPolygon ? (
+                <Polygon
+                  positions={polygonPositions}
                   pathOptions={{
                     color: cfg.color,
                     fillColor: cfg.fillColor,
-                    fillOpacity: 0.05,
-                    weight: 1,
-                    dashArray: '8 4',
+                    fillOpacity: cfg.fillOpacity,
+                    weight: 2,
                   }}
-                />
-              )}
-              {/* Primary alert zone */}
-              <Circle
-                center={[alert.latitude, alert.longitude]}
-                radius={alert.radius_km * 1000}
-                pathOptions={{
-                  color: cfg.color,
-                  fillColor: cfg.fillColor,
-                  fillOpacity: cfg.fillOpacity,
-                  weight: 2,
-                }}
-              >
-                <Popup>
-                  <div className="font-sans min-w-[200px]">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span
-                        className="flex items-center justify-center w-6 h-6 rounded text-white text-sm"
-                        style={{ backgroundColor: cfg.color }}
-                      >
-                        {cfg.icon}
-                      </span>
-                      <div>
+                >
+                  <Popup>
+                    <div className="font-sans min-w-[200px]">
+                      <div className="flex items-center gap-2 mb-2">
                         <span
-                          className="text-xs font-bold uppercase tracking-wider"
-                          style={{ color: cfg.color }}
+                          className="flex items-center justify-center w-6 h-6 rounded text-white text-sm"
+                          style={{ backgroundColor: cfg.color }}
                         >
-                          {cfg.label} Risk
+                          {cfg.icon}
                         </span>
-                        <h3 className="font-bold text-slate-800 text-sm leading-tight">
-                          {alert.title}
-                        </h3>
+                        <div>
+                          <span
+                            className="text-xs font-bold uppercase tracking-wider"
+                            style={{ color: cfg.color }}
+                          >
+                            {alert.imd_color ? `${alert.imd_color} ALERT` : `${cfg.label} Risk`}
+                          </span>
+                          <h3 className="font-bold text-slate-800 text-sm leading-tight">
+                            {alert.title}
+                          </h3>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 mb-2">{alert.description}</p>
+                      {alert.impacts && alert.impacts.length > 0 && (
+                        <div className="mb-2 p-1.5 bg-slate-50 rounded border border-slate-200">
+                          <div className="text-[10px] font-bold text-slate-700 uppercase">Impact ETAs:</div>
+                          {alert.impacts.slice(0, 2).map((imp: any, i: number) => (
+                            <div key={i} className="text-[11px] text-slate-600 flex justify-between">
+                              <span>{imp.location_name}:</span>
+                              <b>{imp.eta_minutes} min ({imp.distance_km} km)</b>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs text-slate-500 border-t pt-2">
+                        <span>Prob: <b>{(alert.probability * 100).toFixed(0)}%</b></span>
+                        <span>{formatRelativeTime(alert.validUntil)}</span>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-600 mb-2">{alert.description}</p>
-                    <div className="flex justify-between text-xs text-slate-500 border-t pt-2">
-                      <span>Prob: <b>{(alert.probability * 100).toFixed(0)}%</b></span>
-                      <span>{formatRelativeTime(alert.validUntil)}</span>
+                  </Popup>
+                </Polygon>
+              ) : (
+                <Circle
+                  center={[alert.latitude, alert.longitude]}
+                  radius={alert.radius_km * 1000}
+                  pathOptions={{
+                    color: cfg.color,
+                    fillColor: cfg.fillColor,
+                    fillOpacity: cfg.fillOpacity,
+                    weight: 2,
+                  }}
+                >
+                  <Popup>
+                    <div className="font-sans min-w-[200px]">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span
+                          className="flex items-center justify-center w-6 h-6 rounded text-white text-sm"
+                          style={{ backgroundColor: cfg.color }}
+                        >
+                          {cfg.icon}
+                        </span>
+                        <div>
+                          <span
+                            className="text-xs font-bold uppercase tracking-wider"
+                            style={{ color: cfg.color }}
+                          >
+                            {alert.imd_color ? `${alert.imd_color} ALERT` : `${cfg.label} Risk`}
+                          </span>
+                          <h3 className="font-bold text-slate-800 text-sm leading-tight">
+                            {alert.title}
+                          </h3>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 mb-2">{alert.description}</p>
+                      <div className="flex justify-between text-xs text-slate-500 border-t pt-2">
+                        <span>Prob: <b>{(alert.probability * 100).toFixed(0)}%</b></span>
+                        <span>{formatRelativeTime(alert.validUntil)}</span>
+                      </div>
                     </div>
-                  </div>
-                </Popup>
-              </Circle>
-              {/* Center marker dot */}
-              <Circle
-                center={[alert.latitude, alert.longitude]}
-                radius={5000}
-                pathOptions={{
-                  color: cfg.color,
-                  fillColor: cfg.color,
-                  fillOpacity: 0.9,
-                  weight: 0,
-                }}
-              />
+                  </Popup>
+                </Circle>
+              )}
             </React.Fragment>
           );
         })}
 
-        {/* ── Active Thunderstorm Cells & Forecast Tracks ── */}
-        {cells.map((cell: any) => {
-          let cLat = cell.center?.lat ?? cell.lat ?? 28.61;
-          let cLon = cell.center?.lon ?? cell.lon ?? 77.23;
-          let currentProb = cell.probability ?? 0.8;
-          const initialLat = cell.center?.lat ?? cell.lat ?? 28.61;
-          const initialLon = cell.center?.lon ?? cell.lon ?? 77.23;
-          const cellKey = cell.cell_id ?? cell.id ?? String(cLat + cLon);
-          const intensity = cell.intensity ?? cell.max_reflectivity_dbz ?? 42.0;
+        {showCells &&
+          cells.map((cell: any) => {
+            let cLat = cell.center?.lat ?? cell.lat ?? 28.61;
+            let cLon = cell.center?.lon ?? cell.lon ?? 77.23;
+            let currentProb = cell.probability ?? 0.8;
+            const initialLat = cell.center?.lat ?? cell.lat ?? 28.61;
+            const initialLon = cell.center?.lon ?? cell.lon ?? 77.23;
+            const cellKey = cell.cell_id ?? cell.id ?? String(cLat + cLon);
+            const intensity = cell.intensity ?? cell.max_reflectivity_dbz ?? cell.max_dbz ?? 42.0;
 
-          if (forecastMinute > 0 && Array.isArray(cell.forecast_positions)) {
-            const match = cell.forecast_positions.find((fp: any) => fp.minutes_ahead === forecastMinute);
-            if (match) {
-              cLat = match.lat;
-              cLon = match.lon;
-              if (typeof match.probability === 'number') {
-                currentProb = match.probability;
+            if (forecastMinute > 0 && Array.isArray(cell.forecast_positions)) {
+              const match = cell.forecast_positions.find((fp: any) => fp.minutes_ahead === forecastMinute);
+              if (match) {
+                cLat = match.lat;
+                cLon = match.lon;
+                if (typeof match.probability === 'number') {
+                  currentProb = match.probability;
+                }
               }
             }
-          }
 
-          return (
-            <React.Fragment key={cellKey}>
-              {/* Predicted Trajectory Track */}
-              {Array.isArray(cell.forecast_positions) && cell.forecast_positions.length > 0 && (
-                <Polyline
-                  positions={[
-                    [initialLat, initialLon],
-                    ...cell.forecast_positions.map((p: any) => [p.lat, p.lon]),
-                  ]}
+            const dLat = cLat - initialLat;
+            const dLon = cLon - initialLon;
+            const hasCellPolygon = Array.isArray(cell.polygon) && cell.polygon.length >= 3;
+            const shiftedPolygon: [number, number][] = hasCellPolygon
+              ? cell.polygon.map(([lon, lat]: [number, number]) => [lat + dLat, lon + dLon] as [number, number])
+              : [];
+
+            return (
+              <React.Fragment key={cellKey}>
+                {hasCellPolygon && (
+                  <Polygon
+                    positions={shiftedPolygon}
+                    pathOptions={{
+                      color: '#ea580c',
+                      fillColor: '#f97316',
+                      fillOpacity: Math.max(0.12, 0.30 * (currentProb / 0.8)),
+                      weight: 2,
+                    }}
+                  />
+                )}
+                {Array.isArray(cell.forecast_positions) && cell.forecast_positions.length > 0 && (
+                  <Polyline
+                    positions={[
+                      [initialLat, initialLon],
+                      ...cell.forecast_positions.map((p: any) => [p.lat, p.lon]),
+                    ]}
+                    pathOptions={{
+                      color: '#f97316',
+                      weight: 2,
+                      dashArray: '5 5',
+                      opacity: 0.7,
+                    }}
+                  />
+                )}
+                <CircleMarker
+                  center={[cLat, cLon]}
+                  radius={7}
                   pathOptions={{
-                    color: '#f97316',
+                    color: '#ea580c',
+                    fillColor: '#f97316',
+                    fillOpacity: 0.9,
                     weight: 2,
-                    dashArray: '5 5',
-                    opacity: 0.7,
                   }}
-                />
-              )}
-
-              <CircleMarker
-                center={[cLat, cLon]}
-                radius={8}
-                pathOptions={{
-                  color: '#ea580c',
-                  fillColor: '#f97316',
-                  fillOpacity: 0.9,
-                  weight: 2,
-                }}
-              >
-                <Popup>
-                  <div className="font-sans min-w-[160px]">
-                    <div className="text-xs font-bold text-slate-800">
-                      Thunderstorm Cell ({cell.cell_id ?? cell.id ?? 'Active'})
-                    </div>
-                    <div className="text-[10px] text-gray-600 mt-1">
-                      Position at: <b>{forecastMinute === 0 ? 'T = 0 (Live)' : `T + ${forecastMinute} min`}</b>
-                    </div>
-                    <div className="text-[10px] text-gray-600">
-                      Coordinates: {cLat.toFixed(2)}°N, {cLon.toFixed(2)}°E
-                    </div>
-                    <div className="text-[10px] text-gray-600">
-                      Reflectivity: {typeof intensity === 'number' ? intensity.toFixed(1) : intensity} dBZ
-                    </div>
-                    <div className="text-[10px] text-gray-600">
-                      Probability: <b>{(currentProb * 100).toFixed(0)}%</b>
-                    </div>
-                    {cell.severity && (
-                      <div className="text-[10px] font-bold text-orange-600 uppercase mt-1">
-                        Severity: {cell.severity}
+                >
+                  <Popup>
+                    <div className="font-sans min-w-[160px]">
+                      <div className="text-xs font-bold text-slate-800">
+                        Thunderstorm Cell ({cell.cell_id ?? cell.id ?? 'Active'})
                       </div>
-                    )}
-                  </div>
-                </Popup>
-              </CircleMarker>
-            </React.Fragment>
-          );
-        })}
+                      <div className="text-[10px] text-gray-600 mt-1">
+                        Position at: <b>{forecastMinute === 0 ? 'T = 0 (Live)' : `T + ${forecastMinute} min`}</b>
+                      </div>
+                      <div className="text-[10px] text-gray-600">
+                        Coordinates: {cLat.toFixed(2)}°N, {cLon.toFixed(2)}°E
+                      </div>
+                      <div className="text-[10px] text-gray-600">
+                        Reflectivity: {typeof intensity === 'number' ? intensity.toFixed(1) : intensity} dBZ
+                      </div>
+                      <div className="text-[10px] text-gray-600">
+                        Probability: <b>{(currentProb * 100).toFixed(0)}%</b>
+                      </div>
+                      {cell.severity && (
+                        <div className="text-[10px] font-bold text-orange-600 uppercase mt-1">
+                          Severity: {cell.severity}
+                        </div>
+                      )}
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              </React.Fragment>
+            );
+          })}
 
-        {/* ── Lightning Strokes ── */}
-        {lightningStrokes.map((stroke: any) => (
-          <CircleMarker
-            key={stroke.id}
-            center={[stroke.lat, stroke.lon]}
-            radius={3}
-            pathOptions={{
-              color: stroke.type === 'CG' ? '#eab308' : '#3b82f6',
-              fillColor: stroke.type === 'CG' ? '#fde047' : '#93c5fd',
-              fillOpacity: 0.9,
-              weight: 0,
-            }}
-          >
-            <Popup>
-              <div className="text-xs font-semibold">Lightning Stroke ({stroke.type})</div>
-              <div className="text-[10px] text-gray-500">Time: {new Date(stroke.time).toLocaleTimeString()}</div>
-            </Popup>
-          </CircleMarker>
-        ))}
+        {showLightning &&
+          lightningStrokes.map((stroke: any) => (
+            <CircleMarker
+              key={stroke.id}
+              center={[stroke.lat, stroke.lon]}
+              radius={3}
+              pathOptions={{
+                color: stroke.type === 'CG' ? '#eab308' : '#3b82f6',
+                fillColor: stroke.type === 'CG' ? '#fde047' : '#93c5fd',
+                fillOpacity: 0.9,
+                weight: 0,
+              }}
+            >
+              <Popup>
+                <div className="text-xs font-semibold">Lightning Stroke ({stroke.type})</div>
+                <div className="text-[10px] text-gray-500">
+                  Time: {new Date(stroke.time || stroke.timestamp).toLocaleTimeString()}
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
 
         <MapUpdater cells={cells} alerts={visibleAlerts} />
         <CustomZoomControl />
       </MapContainer>
 
-      {/* ── Risk Legend ── */}
       <div className="absolute bottom-4 right-4 z-[500] bg-nowcast-sidebar/90 backdrop-blur-md border border-nowcast-border rounded-lg p-3 shadow-lg">
         <div className="text-[10px] font-semibold text-nowcast-textMuted uppercase tracking-wider mb-2">
           Risk Levels
@@ -288,19 +370,14 @@ export function NowcastMap() {
                   className="w-3 h-3 rounded-full border"
                   style={{ backgroundColor: cfg.fillColor, borderColor: cfg.color, opacity: 1 }}
                 />
-                <span className="text-nowcast-text font-medium">
-                  {cfg.label}
-                </span>
-                {count > 0 && (
-                  <span className={`ml-auto font-bold ${cfg.textClass}`}>{count}</span>
-                )}
+                <span className="text-nowcast-text font-medium">{cfg.label}</span>
+                {count > 0 && <span className={`ml-auto font-bold ${cfg.textClass}`}>{count}</span>}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* ── Loading Overlay ── */}
       {loading && (
         <div className="absolute inset-0 z-[600] flex items-center justify-center bg-nowcast-bg/60 backdrop-blur-sm">
           <div className="rounded-lg bg-nowcast-sidebar p-4 shadow-xl border border-nowcast-border text-nowcast-text flex items-center gap-3">
@@ -311,28 +388,4 @@ export function NowcastMap() {
       )}
     </div>
   );
-}
-
-// ────────────────────────────────────────────────────────────────
-//  Helpers
-// ────────────────────────────────────────────────────────────────
-
-/** Maps backend severity strings to the 4-tier risk enum. */
-function mapSeverityToRisk(severity?: string): RiskLevel {
-  switch (severity?.toUpperCase()) {
-    case 'EXTREME':
-      return 'extreme';
-    case 'WARNING':
-    case 'SEVERE':
-      return 'severe';
-    case 'WATCH':
-      return 'high';
-    case 'ADVISORY':
-    case 'MODERATE':
-      return 'moderate';
-    case 'LOW':
-      return 'low';
-    default:
-      return 'minimal';
-  }
 }

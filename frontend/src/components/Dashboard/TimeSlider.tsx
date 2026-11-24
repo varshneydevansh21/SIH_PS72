@@ -18,6 +18,10 @@ export const TimeSlider: React.FC<TimeSliderProps> = ({
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [speed, setSpeed] = useState<number>(1);
 
+  useEffect(() => {
+    setMinute(currentMinute);
+  }, [currentMinute]);
+
   const steps = [];
   for (let m = 0; m <= maxMinutes; m += stepMinutes) {
     steps.push(m);

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from geoalchemy2.shape import to_shape
@@ -6,8 +7,10 @@ from geoalchemy2.shape import to_shape
 from app.db.session import get_db
 from app.models.nowcast import Nowcast
 from app.services.nowcast_adapter import run_nowcast
+from app.services.raster_service import RasterService
 
 router = APIRouter(prefix="/nowcast", tags=["nowcast"])
+raster_service = RasterService()
 
 
 def serialize_nowcast(nowcast: Nowcast) -> dict:
@@ -64,6 +67,22 @@ async def get_latest_nowcast(db: AsyncSession = Depends(get_db)) -> dict:
         "model": {"name": "ps72-unet-convlstm", "version": "1.0.0", "source": "database"},
         "count": len(serialized),
     }
+
+
+@router.get("/raster")
+async def get_nowcast_raster(
+    minute: int = Query(default=0, ge=0, le=120),
+    layer: str = Query(default="composite"),
+    width: int = Query(default=256, ge=64, le=1024),
+    height: int = Query(default=256, ge=64, le=1024),
+) -> Response:
+    png_bytes = raster_service.generate_raster_png(
+        minute=minute,
+        layer=layer,
+        width=width,
+        height=height,
+    )
+    return Response(content=png_bytes, media_type="image/png")
 
 
 @router.get("/{nowcast_id}")

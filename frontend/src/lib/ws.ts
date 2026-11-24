@@ -11,10 +11,15 @@ class NowcastWebSocketClient {
     if (url) {
       this.url = url;
     } else {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.hostname;
-      const port = window.location.port ? ':8001' : '';
-      this.url = `${protocol}//${host}${port}/ws/nowcast`;
+      const explicitUrl = (import.meta as any).env?.VITE_WS_URL;
+      if (explicitUrl) {
+        this.url = explicitUrl;
+      } else {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.hostname;
+        const port = window.location.port ? `:${window.location.port}` : '';
+        this.url = `${protocol}//${host}${port}/ws/nowcast`;
+      }
     }
   }
 

@@ -67,6 +67,9 @@ export const useNowcastStore = create<NowcastState>((set, get) => ({
           validUntil: a.validUntil || a.valid_until || new Date(Date.now() + 2 * 3600000).toISOString(),
           eventType: a.eventType || a.alert_type || 'THUNDERSTORM',
           probability: a.probability ?? 0.75,
+          polygon: Array.isArray(a.polygon) ? a.polygon : undefined,
+          imd_color: a.imd_color,
+          impacts: Array.isArray(a.impacts) ? a.impacts : [],
         }));
         set({ alerts: formatted, isLoading: false, error: null });
       } else {
