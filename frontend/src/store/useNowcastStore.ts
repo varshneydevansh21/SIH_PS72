@@ -13,6 +13,8 @@ interface NowcastState {
   timestamp: string | null;
   selectedLayer: MapLayer;
   operationalMode: OperationalMode;
+  replayEventId: string | null;
+  replayBounds: [[number, number], [number, number]] | null;
   mapCenter: [number, number] | null;
   mapZoom: number | null;
   forecastMinute: number;
@@ -40,6 +42,8 @@ export const useNowcastStore = create<NowcastState>((set, get) => ({
   timestamp: null,
   selectedLayer: 'thunderstorm',
   operationalMode: 'OFFLINE_DEMO',
+  replayEventId: null,
+  replayBounds: null,
   mapCenter: null,
   mapZoom: null,
   forecastMinute: 0,
@@ -49,7 +53,10 @@ export const useNowcastStore = create<NowcastState>((set, get) => ({
   setNowcastData: (data) => set({ cells: data.cells || [], timestamp: data.issued_at }),
   setAlerts: (alerts) => set({ alerts }),
   setSelectedLayer: (layer) => set({ selectedLayer: layer }),
-  setOperationalMode: (mode) => set({ operationalMode: mode }),
+  setOperationalMode: (mode) => set((state) => ({
+    operationalMode: mode,
+    ...(mode !== 'HISTORICAL_REPLAY' ? { replayEventId: null, replayBounds: null } : {}),
+  })),
   loadHistoricalEvent: (eventData) => {
     const cells = eventData.cells || [];
     const syntheticAlerts = cells.map((c: any) => ({
@@ -67,12 +74,20 @@ export const useNowcastStore = create<NowcastState>((set, get) => ({
       polygon: c.polygon,
       imd_color: c.severity === 'extreme' ? 'RED' : 'ORANGE',
     }));
+    const bounds: [[number, number], [number, number]] | null = eventData.bounds
+      ? [
+          [eventData.bounds.lat_min, eventData.bounds.lon_min],
+          [eventData.bounds.lat_max, eventData.bounds.lon_max],
+        ]
+      : null;
     set({
       cells,
       alerts: syntheticAlerts,
       lightningStrokes: eventData.lightning_strokes || [],
       timestamp: eventData.date,
       operationalMode: 'HISTORICAL_REPLAY',
+      replayEventId: eventData.event_id || null,
+      replayBounds: bounds,
       forecastMinute: 0,
       mapCenter: eventData.center ? [eventData.center.lat, eventData.center.lon] : null,
       mapZoom: 8,

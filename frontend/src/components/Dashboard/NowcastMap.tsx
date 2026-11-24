@@ -87,7 +87,17 @@ function CustomZoomControl() {
 }
 
 export function NowcastMap() {
-  const { cells, alerts, lightningStrokes, forecastMinute, selectedLayer, timestamp } = useNowcastStore();
+  const {
+    cells,
+    alerts,
+    lightningStrokes,
+    forecastMinute,
+    selectedLayer,
+    timestamp,
+    operationalMode,
+    replayEventId,
+    replayBounds,
+  } = useNowcastStore();
   const [loading, setLoading] = useState(true);
   const [dismissedAlerts] = useState<Set<string>>(new Set());
 
@@ -103,8 +113,13 @@ export function NowcastMap() {
 
   const rasterUrl = useMemo(() => {
     const base = (import.meta as any).env?.VITE_API_BASE_URL || '/api/v1';
+    if (operationalMode === 'HISTORICAL_REPLAY' && replayEventId) {
+      return `${base}/replay/events/${encodeURIComponent(replayEventId)}/raster?minute=${forecastMinute}`;
+    }
     return `${base}/nowcast/raster?minute=${forecastMinute}&layer=${selectedLayer}&ts=${encodeURIComponent(timestamp || '')}`;
-  }, [forecastMinute, selectedLayer, timestamp]);
+  }, [forecastMinute, selectedLayer, timestamp, operationalMode, replayEventId]);
+
+  const activeBounds = (operationalMode === 'HISTORICAL_REPLAY' && replayBounds) ? replayBounds : DELHI_NCR_BOUNDS;
 
   const showLightning = selectedLayer === 'lightning' || selectedLayer === 'composite' || selectedLayer === 'observations';
   const showCells = selectedLayer === 'thunderstorm' || selectedLayer === 'composite' || selectedLayer === 'observations';
@@ -126,7 +141,7 @@ export function NowcastMap() {
         {selectedLayer !== 'observations' && (
           <ImageOverlay
             url={rasterUrl}
-            bounds={DELHI_NCR_BOUNDS}
+            bounds={activeBounds}
             opacity={0.62}
             zIndex={200}
           />

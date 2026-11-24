@@ -74,7 +74,8 @@ class OperationalRunner:
                 )
                 db.add(record)
                 await db.commit()
-            except Exception:
+            except Exception as exc:
+                logger.warning(f"Failed to persist nowcast cycle {cycle_id} to DB: {exc}")
                 await db.rollback()
 
         total_ms = (time.perf_counter() - t_start) * 1000.0
@@ -127,7 +128,10 @@ class OperationalRunner:
     def start_scheduler(self, interval_seconds: int = 900):
         if self._is_running and self._task and not self._task.done():
             return
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
         self._task = loop.create_task(self._loop(interval_seconds))
 
     def stop_scheduler(self):
